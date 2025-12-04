@@ -1,0 +1,3 @@
+"""
+Amadeus Tests Package
+"""

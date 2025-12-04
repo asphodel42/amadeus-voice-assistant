@@ -1,0 +1,43 @@
+# ============================================
+# Amadeus Voice Assistant - Dependencies
+# ============================================
+
+# Core
+dataclasses-json>=0.6.3
+typing-extensions>=4.9.0
+
+# Voice Processing
+vosk>=0.3.45
+pvporcupine>=3.0.0
+sounddevice>=0.4.6
+numpy>=1.26.0
+
+# NLU (Deterministic baseline)
+# No external deps needed for regex-based NLU
+
+# UI
+PyQt5>=5.15.10
+
+# Database / Persistence
+sqlalchemy>=2.0.25
+
+# Security / Cryptography
+cryptography>=41.0.7
+pynacl>=1.5.0
+
+# Testing
+pytest>=7.4.4
+pytest-cov>=4.1.0
+pytest-asyncio>=0.23.3
+
+# Development
+mypy>=1.8.0
+black>=23.12.1
+isort>=5.13.2
+flake8>=7.0.0
+
+# Research / Benchmarking (optional)
+# whisper>=1.0.0  # For experimental comparison
+# llama-cpp-python>=0.2.0  # For LLM experiments
+matplotlib>=3.8.2
+pandas>=2.1.4
