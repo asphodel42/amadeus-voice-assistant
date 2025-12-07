@@ -1,7 +1,7 @@
 """
 Amadeus Voice Adapters Package
 
-Адаптери для голосової обробки:
+Adapters for voice processing:
 - Wake Word Detection
 - ASR (Automatic Speech Recognition)
 - NLU (Natural Language Understanding)

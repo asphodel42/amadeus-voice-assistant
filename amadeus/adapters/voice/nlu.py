@@ -1,21 +1,20 @@
 """
 Deterministic NLU (Natural Language Understanding)
 
-Детерміноване розуміння природної мови на основі регулярних виразів та правил.
-Це базова реалізація для MVP — надійна та передбачувана.
+Deterministic understanding of natural language based on regular expressions and rules.
+This is a basic implementation for MVP - reliable and predictable.
 
-Переваги:
-- Детерміновані результати (один вхід → один вихід)
-- Низька затримка (<10ms)
-- Немає залежностей від ML моделей
-- Легко тестувати та налагоджувати
+Advantages:
+- Deterministic results (one input -> one output)
+- Low latency (<10ms)
+- No dependencies on ML models
+- Easy to test and debug
 
-Обмеження:
-- Не розуміє перефразування
-- Потребує явних шаблонів для кожного варіанту
-- Не масштабується на велику кількість намірів
-
-Для порівняння див. LLM-based NLU у дослідницькому модулі.
+Limitations:
+- Does not understand paraphrasing
+- Requires explicit patterns for each variant
+- Does not scale to a large number of intents
+.
 """
 
 from __future__ import annotations
@@ -30,14 +29,14 @@ from amadeus.core.entities import CommandRequest, Intent, IntentType
 @dataclass
 class NLUPattern:
     """
-    Шаблон для розпізнавання наміру.
-    
+    Template for intent recognition.
+
     Attributes:
-        intent_type: Тип наміру для цього шаблону
-        patterns: Список регулярних виразів
-        slot_extractors: Функції для витягування слотів
-        priority: Пріоритет (вищий = перевіряється першим)
-        examples: Приклади команд (для документації/тестів)
+        intent_type: Type of intent for this pattern
+        patterns: List of regular expressions
+        slot_extractors: Functions for extracting slots
+        priority: Priority (higher = checked first)
+        examples: Examples of commands (for documentation/testing)
     """
     intent_type: IntentType
     patterns: List[str]
@@ -46,7 +45,7 @@ class NLUPattern:
     examples: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        # Компілюємо регулярні вирази
+        # Compile regular expressions
         self._compiled: List[Pattern[str]] = []
         for pattern in self.patterns:
             try:
@@ -56,7 +55,7 @@ class NLUPattern:
 
 
 # ============================================
-# Шаблони для MVP команд
+# Templates for MVP commands
 # ============================================
 
 DEFAULT_PATTERNS: List[NLUPattern] = [
@@ -68,8 +67,8 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
             r"^launch\s+(?P<app_name>[\w\s]+)$",
             r"^start\s+(?P<app_name>[\w\s]+)$",
             r"^run\s+(?P<app_name>[\w\s]+)$",
-            r"^відкрий\s+(?P<app_name>[\w\s]+)$",  # Ukrainian
-            r"^запусти\s+(?P<app_name>[\w\s]+)$",  # Ukrainian
+            r"^відкрий\s+(?P<app_name>[\w\s]+)$",
+            r"^запусти\s+(?P<app_name>[\w\s]+)$",
         ],
         priority=10,
         examples=[
@@ -108,8 +107,8 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
             r"^find\s+(?:information\s+(?:about|on)\s+)?(?P<query>.+)$",
             r"^what\s+is\s+(?P<query>.+)$",
             r"^who\s+is\s+(?P<query>.+)$",
-            r"^пошук\s+(?P<query>.+)$",  # Ukrainian
-            r"^знайди\s+(?P<query>.+)$",  # Ukrainian
+            r"^пошук\s+(?P<query>.+)$",
+            r"^знайди\s+(?P<query>.+)$",
         ],
         priority=5,
         examples=[
@@ -131,9 +130,9 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
             r"^dir\s+(?P<path>.+)$",
             r"^list\s+(?:the\s+)?directory(?:\s+(?P<path>.+))?$",
             r"^show\s+(?:the\s+)?directory(?:\s+(?P<path>.+))?$",
-            r"^покажи\s+файли\s+(?:в\s+)?(?P<path>.+)$",  # Ukrainian
+            r"^покажи\s+файли\s+(?:в\s+)?(?P<path>.+)$", 
         ],
-        priority=10,  # Higher priority than WEB_SEARCH to catch "what's in" first
+        priority=10,
         examples=[
             "list files in ~/Documents",
             "show ~/Downloads",
@@ -150,7 +149,7 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
             r"^show\s+(?:contents\s+of\s+)?(?:file\s+)?(?P<path>.+)$",
             r"^cat\s+(?P<path>.+)$",
             r"^view\s+(?:file\s+)?(?P<path>.+)$",
-            r"^прочитай\s+(?:файл\s+)?(?P<path>.+)$",  # Ukrainian
+            r"^прочитай\s+(?:файл\s+)?(?P<path>.+)$",
         ],
         priority=5,
         examples=[
@@ -168,7 +167,7 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
             r"^make\s+(?:a\s+)?(?:new\s+)?file\s+(?P<path>.+)$",
             r"^touch\s+(?P<path>.+)$",
             r"^new\s+file\s+(?P<path>.+)$",
-            r"^створи\s+файл\s+(?P<path>.+)$",  # Ukrainian
+            r"^створи\s+файл\s+(?P<path>.+)$",
         ],
         priority=5,
         examples=[
@@ -186,7 +185,7 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
             r"^write\s+(?P<content>.+?)\s+to\s+(?:file\s+)?(?P<path>.+)$",
             r"^save\s+(?P<content>.+?)\s+to\s+(?:file\s+)?(?P<path>.+)$",
             r"^append\s+(?P<content>.+?)\s+to\s+(?:file\s+)?(?P<path>.+)$",
-            r"^запиши\s+(?P<content>.+?)\s+(?:в|до)\s+(?:файл\s+)?(?P<path>.+)$",  # Ukrainian
+            r"^запиши\s+(?P<content>.+?)\s+(?:в|до)\s+(?:файл\s+)?(?P<path>.+)$",
         ],
         priority=5,
         examples=[
@@ -203,7 +202,7 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
             r"^remove\s+(?:file\s+)?(?P<path>.+)$",
             r"^rm\s+(?:-r\s+)?(?P<path>.+)$",
             r"^erase\s+(?:file\s+)?(?P<path>.+)$",
-            r"^видали\s+(?:файл\s+)?(?P<path>.+)$",  # Ukrainian
+            r"^видали\s+(?:файл\s+)?(?P<path>.+)$", 
         ],
         priority=5,
         examples=[
@@ -222,8 +221,8 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
             r"^system\s+status$",
             r"^computer\s+info(?:rmation)?$",
             r"^about\s+(?:this\s+)?computer$",
-            r"^інформація\s+про\s+систему$",  # Ukrainian
-            r"^інфо\s+системи$",  # Ukrainian
+            r"^інформація\s+про\s+систему$",
+            r"^інфо\s+системи$",
         ],
         priority=5,
         examples=[
@@ -237,28 +236,30 @@ DEFAULT_PATTERNS: List[NLUPattern] = [
 
 class DeterministicNLU:
     """
-    Детерміноване розуміння природної мови.
-    
-    Використовує регулярні вирази для розпізнавання намірів та витягування слотів.
-    
-    Приклад використання:
-        nlu = DeterministicNLU()
-        intent = nlu.parse("open calculator")
-        # Intent(intent_type=IntentType.OPEN_APP, slots={"app_name": "calculator"}, ...)
+    Deterministic natural language understanding.
+
+    Uses regular expressions to recognize intents and extract slots.
+
+    Example:
+    ```
+    nlu = DeterministicNLU()
+    intent = nlu.parse("open calculator")
+    # Intent(intent_type=IntentType.OPEN_APP, slots={"app_name": "calculator"}, ...)
+    ```
     """
 
     def __init__(self, patterns: Optional[List[NLUPattern]] = None) -> None:
         self.patterns = patterns or DEFAULT_PATTERNS.copy()
-        # Сортуємо за пріоритетом (вищий → перевіряється першим)
+        # Sort by priority (higher -> checked first)
         self.patterns.sort(key=lambda p: -p.priority)
-        
-        # Preprocessors для нормалізації тексту
+
+        # Preprocessors for text normalization
         self._preprocessors: List[Callable[[str], str]] = [
             self._normalize_whitespace,
             self._expand_contractions,
         ]
-        
-        # Postprocessors для слотів
+
+        # Postprocessors for slots
         self._slot_processors: Dict[str, Callable[[str], str]] = {
             "path": self._process_path,
             "url": self._process_url,
@@ -267,33 +268,33 @@ class DeterministicNLU:
 
     def parse(self, text: str) -> Intent:
         """
-        Парсить текст команди в структурований намір.
-        
+        Parse command text into structured intent.
+
         Args:
-            text: Текст команди (після ASR)
-            
+            text: Command text (after ASR)
+
         Returns:
-            Розпізнаний Intent
+            Recognized Intent
         """
         # Preprocessing
         normalized = self._preprocess(text)
-        
-        # Намагаємось знайти відповідний шаблон
+
+        # Try to find a matching pattern
         for pattern_def in self.patterns:
             for compiled in pattern_def._compiled:
                 match = compiled.match(normalized)
                 if match:
-                    # Витягуємо слоти
+                    # Extract slots
                     slots = self._extract_slots(match, pattern_def)
                     
                     return Intent(
                         intent_type=pattern_def.intent_type,
                         slots=slots,
-                        confidence=1.0,  # Regex = детерміновано
+                        confidence=1.0,  # Regex = high confidence
                         original_request=CommandRequest(raw_text=text),
                     )
-        
-        # Нічого не знайдено
+
+        # Nothing found
         return Intent(
             intent_type=IntentType.UNKNOWN,
             slots={},
@@ -302,18 +303,18 @@ class DeterministicNLU:
         )
 
     def _preprocess(self, text: str) -> str:
-        """Нормалізує текст перед парсингом."""
+        """Normalize text before parsing."""
         result = text.strip()
         for processor in self._preprocessors:
             result = processor(result)
         return result
 
     def _normalize_whitespace(self, text: str) -> str:
-        """Нормалізує пробіли."""
+        """Normalize whitespace."""
         return " ".join(text.split())
 
     def _expand_contractions(self, text: str) -> str:
-        """Розгортає скорочення."""
+        """Expand contractions."""
         contractions = {
             "what's": "what is",
             "it's": "it is",
@@ -334,12 +335,12 @@ class DeterministicNLU:
         match: re.Match,
         pattern_def: NLUPattern
     ) -> Dict[str, Any]:
-        """Витягує слоти з match об'єкта."""
+        """Extract slots from match object."""
         slots = {}
         
         for name, value in match.groupdict().items():
             if value is not None:
-                # Застосовуємо postprocessor якщо є
+                # Apply postprocessor if exists
                 processor = self._slot_processors.get(name)
                 if processor:
                     value = processor(value)
@@ -348,20 +349,20 @@ class DeterministicNLU:
         return slots
 
     def _process_path(self, path: str) -> str:
-        """Обробляє шлях до файлу."""
+        """Process file path."""
         path = path.strip()
-        # Розгортаємо ~ до home directory
+        # Expand ~ to home directory
         if path.startswith("~"):
             from pathlib import Path
             path = str(Path(path).expanduser())
-        # Нормалізуємо шлях
+        # Normalize path separators
         path = path.replace("\\", "/")
         return path
 
     def _process_url(self, url: str) -> str:
-        """Обробляє URL."""
+        """Process URL."""
         url = url.strip()
-        # Додаємо https:// якщо немає протоколу
+        # Add https:// if no protocol is present
         if not url.startswith(("http://", "https://")):
             if url.startswith("www."):
                 url = "https://" + url
@@ -370,20 +371,20 @@ class DeterministicNLU:
         return url
 
     def _process_app_name(self, name: str) -> str:
-        """Обробляє назву додатку."""
+        """Process app name."""
         return name.strip().lower()
 
     def add_pattern(self, pattern: NLUPattern) -> None:
-        """Додає новий шаблон."""
+        """Add new pattern."""
         self.patterns.append(pattern)
         self.patterns.sort(key=lambda p: -p.priority)
 
     def get_supported_intents(self) -> List[IntentType]:
-        """Повертає список підтримуваних намірів."""
+        """Returns a list of supported intents."""
         return list(set(p.intent_type for p in self.patterns))
 
     def get_examples(self, intent_type: IntentType) -> List[str]:
-        """Повертає приклади команд для наміру."""
+        """Returns example commands for the intent."""
         examples = []
         for pattern in self.patterns:
             if pattern.intent_type == intent_type:
@@ -396,7 +397,7 @@ class DeterministicNLU:
 # ============================================
 
 def test_nlu_patterns() -> None:
-    """Тестує всі шаблони NLU."""
+    """Tests all NLU patterns."""
     nlu = DeterministicNLU()
     
     test_cases = [
@@ -420,10 +421,10 @@ def test_nlu_patterns() -> None:
         intent = nlu.parse(text)
         
         if intent.intent_type == expected_intent:
-            print(f"  ✓ '{text}' → {intent.intent_type.value}")
+            print(f"  ✓ '{text}' -> {intent.intent_type.value}")
             passed += 1
         else:
-            print(f"  ✗ '{text}' → {intent.intent_type.value} (expected {expected_intent.value})")
+            print(f"  ✗ '{text}' -> {intent.intent_type.value} (expected {expected_intent.value})")
             failed += 1
     
     print(f"\nResults: {passed} passed, {failed} failed")
