@@ -1,7 +1,7 @@
 """
 Amadeus Voice Assistant - Main Entry Point
 
-Головна точка входу для запуску асистента.
+Main entry point for launching the assistant.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from amadeus.app.pipeline import VoicePipeline, PipelineConfig
 
 
 def setup_logging(verbose: bool = False) -> None:
-    """Налаштовує логування."""
+    """Sets up logging."""
     level = logging.DEBUG if verbose else logging.INFO
     
     logging.basicConfig(
@@ -23,14 +23,14 @@ def setup_logging(verbose: bool = False) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    
-    # Зменшуємо шум від бібліотек
+
+    # Reduce noise from libraries
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("PIL").setLevel(logging.WARNING)
 
 
 def run_interactive(pipeline: VoicePipeline) -> None:
-    """Запускає інтерактивний текстовий режим."""
+    """Runs the interactive text mode."""
     print("=" * 60)
     print("Amadeus Voice Assistant - Interactive Mode")
     print("=" * 60)
@@ -61,8 +61,8 @@ def run_interactive(pipeline: VoicePipeline) -> None:
         if command.lower() == "state":
             print(f"Current state: {pipeline.get_state().name}")
             continue
-        
-        # Обробляємо команду
+
+        # Process command
         print()
         result = pipeline.process_text(command)
         
@@ -83,7 +83,7 @@ def run_interactive(pipeline: VoicePipeline) -> None:
 
 
 def print_help() -> None:
-    """Виводить список прикладів команд."""
+    """Prints a list of example commands."""
     print()
     print("Example commands:")
     print("-" * 40)
@@ -99,7 +99,7 @@ def print_help() -> None:
 
 
 def run_single_command(pipeline: VoicePipeline, command: str, dry_run: bool = False) -> int:
-    """Виконує одну команду та повертає exit code."""
+    """Executes a single command and returns the exit code."""
     result = pipeline.process_text(command, dry_run=dry_run)
     
     if result.success:
@@ -116,7 +116,7 @@ def run_single_command(pipeline: VoicePipeline, command: str, dry_run: bool = Fa
 
 
 def main(args: Optional[list] = None) -> int:
-    """Головна функція."""
+    """Main entry point."""
     parser = argparse.ArgumentParser(
         prog="amadeus",
         description="Amadeus Voice Assistant - Privacy-first local PC assistant",
@@ -147,18 +147,18 @@ def main(args: Optional[list] = None) -> int:
     )
     
     parsed = parser.parse_args(args)
-    
-    # Налаштовуємо логування
+
+    # Sets up logging
     setup_logging(parsed.verbose)
-    
-    # Створюємо пайплайн
+
+    # Creates the pipeline
     config = PipelineConfig(
         dry_run_by_default=parsed.dry_run,
         verbose_logging=parsed.verbose,
     )
     pipeline = VoicePipeline(config=config)
-    
-    # Виконуємо
+
+    # Execute command
     if parsed.command:
         return run_single_command(pipeline, parsed.command, parsed.dry_run)
     else:

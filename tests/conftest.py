@@ -1,32 +1,32 @@
 """
 Pytest Configuration
 
-Конфігурація та фікстури для тестів.
+Configuration and fixtures for tests.
 """
 
 import pytest
 import sys
 import os
 
-# Додаємо кореневу директорію до path
+# Adds the root directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 @pytest.fixture
 def sample_command_text():
-    """Приклад команди для тестування."""
+    """Example command for testing."""
     return "open calculator"
 
 
 @pytest.fixture
 def sample_unsafe_command():
-    """Приклад небезпечної команди."""
+    """Example of an unsafe command."""
     return "delete file /etc/passwd"
 
 
 @pytest.fixture
 def temp_allowed_dir(tmp_path):
-    """Створює тимчасову дозволену директорію."""
+    """Creates a temporary allowed directory."""
     allowed_dir = tmp_path / "allowed"
     allowed_dir.mkdir()
     return allowed_dir
@@ -34,7 +34,7 @@ def temp_allowed_dir(tmp_path):
 
 @pytest.fixture
 def mock_os_adapter(mocker):
-    """Мок для OS адаптера."""
+    """Mock for OS adapter."""
     adapter = mocker.MagicMock()
     adapter.is_path_allowed.return_value = True
     adapter.is_app_allowed.return_value = True

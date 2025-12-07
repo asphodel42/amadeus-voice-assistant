@@ -6,30 +6,30 @@ Ensures deterministic behavior and safe transitions between states.
 
 State diagram:
     
-    /------\   wake_word     /-----------\
-    | IDLE | --------------->| LISTENING |
-    \------/                 \<----------/
+     ------    wake_word      -----------
+    | IDLE |---------------->| LISTENING |
+     ------                   -----------
         A                          |
         |                     audio_complete
         |                          V
-        |                    /------------\
+        |                     ------------
         |   cancel/error     | PROCESSING |
         |-------------------<|            |
-        |                    \------------/
+        |                     ------------
         |                          |
         |                      plan_ready
         |                          V
-        |                    /-----------\
+        |                     -----------
         |   cancel/deny      | REVIEWING |
         |-------------------<|           |
-        |                    \-----------/
+        |                     -----------
         |                          |
         |                       confirm
         |                          V
-        |                    /-----------\
+        |                     -----------
         |   complete/error   | EXECUTING |
          -------------------<|           |
-                             \-----------/
+                              -----------
 """
 
 from __future__ import annotations

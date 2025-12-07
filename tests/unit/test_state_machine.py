@@ -1,7 +1,7 @@
 """
 Unit Tests for State Machine
 
-Тести для кінцевого автомата станів.
+Tests for the state machine.
 """
 
 import pytest
@@ -15,24 +15,24 @@ from amadeus.core.state_machine import (
 
 
 class TestConfirmationStateMachine:
-    """Тести для ConfirmationStateMachine."""
-    
+    """Tests for ConfirmationStateMachine."""
+
     def test_initial_state(self):
-        """Перевіряє початковий стан."""
+        """Tests the initial state."""
         sm = ConfirmationStateMachine()
         
         assert sm.state == AssistantState.IDLE
         assert sm.is_idle
     
     def test_custom_initial_state(self):
-        """Перевіряє кастомний початковий стан."""
+        """Tests the custom initial state."""
         sm = ConfirmationStateMachine(initial_state=AssistantState.LISTENING)
         
         assert sm.state == AssistantState.LISTENING
         assert sm.is_listening
     
     def test_wake_word_transition(self):
-        """Перевіряє перехід по wake word."""
+        """Tests the wake word transition."""
         sm = ConfirmationStateMachine()
         
         assert sm.can_transition(StateTransition.WAKE_WORD)
@@ -41,38 +41,38 @@ class TestConfirmationStateMachine:
         assert sm.state == AssistantState.LISTENING
     
     def test_full_flow(self):
-        """Перевіряє повний потік: IDLE → LISTENING → PROCESSING → REVIEWING → EXECUTING → IDLE."""
+        """Tests the full flow: IDLE -> LISTENING -> PROCESSING -> REVIEWING -> EXECUTING -> IDLE."""
         sm = ConfirmationStateMachine()
         
-        # IDLE → LISTENING
+        # IDLE -> LISTENING
         sm.transition(StateTransition.WAKE_WORD)
         assert sm.is_listening
         
-        # LISTENING → PROCESSING
+        # LISTENING -> PROCESSING
         sm.transition(StateTransition.AUDIO_COMPLETE)
         assert sm.is_processing
         
-        # PROCESSING → REVIEWING (план потребує підтвердження)
+        # PROCESSING -> REVIEWING (plan needs confirmation)
         sm.transition(StateTransition.PLAN_READY)
         assert sm.is_reviewing
         
-        # REVIEWING → EXECUTING
+        # REVIEWING -> EXECUTING
         sm.transition(StateTransition.CONFIRM)
         assert sm.is_executing
         
-        # EXECUTING → IDLE
+        # EXECUTING -> IDLE
         sm.transition(StateTransition.COMPLETE)
         assert sm.is_idle
     
     def test_auto_execute_safe_plan(self):
-        """Перевіряє автоматичне виконання безпечного плану."""
+        """Tests automatic execution of a safe plan."""
         sm = ConfirmationStateMachine()
         
-        # IDLE → LISTENING → PROCESSING
+        # IDLE -> LISTENING -> PROCESSING
         sm.transition(StateTransition.WAKE_WORD)
         sm.transition(StateTransition.AUDIO_COMPLETE)
-        
-        # PROCESSING → EXECUTING (безпечний план, без підтвердження)
+
+        # PROCESSING -> EXECUTING (safe plan, no confirmation)
         sm.transition(StateTransition.PLAN_SAFE)
         assert sm.is_executing
         
@@ -80,7 +80,7 @@ class TestConfirmationStateMachine:
         assert sm.is_idle
     
     def test_cancel_from_listening(self):
-        """Перевіряє скасування з режиму прослуховування."""
+        """Tests cancellation from listening state."""
         sm = ConfirmationStateMachine()
         
         sm.transition(StateTransition.WAKE_WORD)
@@ -89,7 +89,7 @@ class TestConfirmationStateMachine:
         assert sm.is_idle
     
     def test_deny_in_reviewing(self):
-        """Перевіряє відмову в режимі перегляду."""
+        """Tests denial in reviewing state."""
         sm = ConfirmationStateMachine()
         
         sm.transition(StateTransition.WAKE_WORD)
@@ -102,7 +102,7 @@ class TestConfirmationStateMachine:
         assert sm.is_idle
     
     def test_timeout_in_listening(self):
-        """Перевіряє таймаут у режимі прослуховування."""
+        """Tests timeout in listening state."""
         sm = ConfirmationStateMachine()
         
         sm.transition(StateTransition.WAKE_WORD)
@@ -111,7 +111,7 @@ class TestConfirmationStateMachine:
         assert sm.is_idle
     
     def test_error_transition(self):
-        """Перевіряє перехід у стан помилки."""
+        """Tests transition to error state."""
         sm = ConfirmationStateMachine()
         
         sm.transition(StateTransition.WAKE_WORD)
@@ -120,7 +120,7 @@ class TestConfirmationStateMachine:
         assert sm.is_error
     
     def test_reset_from_error(self):
-        """Перевіряє скидання зі стану помилки."""
+        """Tests reset from error state."""
         sm = ConfirmationStateMachine()
         
         sm.transition(StateTransition.ERROR)
@@ -130,15 +130,15 @@ class TestConfirmationStateMachine:
         assert sm.is_idle
     
     def test_invalid_transition(self):
-        """Перевіряє недозволений перехід."""
+        """Tests invalid transition."""
         sm = ConfirmationStateMachine()
         
-        # IDLE → CONFIRM (неможливо)
+        # IDLE -> CONFIRM (impossible)
         with pytest.raises(InvalidTransitionError):
             sm.transition(StateTransition.CONFIRM)
     
     def test_get_allowed_transitions(self):
-        """Перевіряє отримання дозволених переходів."""
+        """Tests getting allowed transitions."""
         sm = ConfirmationStateMachine()
         
         allowed = sm.get_allowed_transitions()
@@ -148,7 +148,7 @@ class TestConfirmationStateMachine:
         assert StateTransition.CONFIRM not in allowed
     
     def test_callback_on_transition(self):
-        """Перевіряє callback при переході."""
+        """Tests callback on transition."""
         sm = ConfirmationStateMachine()
         
         transitions = []
@@ -166,7 +166,7 @@ class TestConfirmationStateMachine:
         assert transitions[1] == (AssistantState.LISTENING, AssistantState.PROCESSING)
     
     def test_remove_callback(self):
-        """Перевіряє видалення callback."""
+        """Tests removal of callback."""
         sm = ConfirmationStateMachine()
         calls = []
         
@@ -180,11 +180,11 @@ class TestConfirmationStateMachine:
         
         sm.remove_callback(callback)
         sm.transition(StateTransition.AUDIO_COMPLETE)
-        
-        assert len(calls) == 1  # Не збільшилось
-    
+
+        assert len(calls) == 1  # Did not increase
+
     def test_force_reset(self):
-        """Перевіряє примусове скидання."""
+        """Tests forced reset."""
         sm = ConfirmationStateMachine()
         
         sm.transition(StateTransition.WAKE_WORD)
@@ -195,7 +195,7 @@ class TestConfirmationStateMachine:
         assert sm.is_idle
     
     def test_transition_history(self):
-        """Перевіряє історію переходів."""
+        """Tests transition history."""
         sm = ConfirmationStateMachine()
         
         sm.transition(StateTransition.WAKE_WORD)
@@ -208,7 +208,7 @@ class TestConfirmationStateMachine:
         assert history[0]["to_state"] == "LISTENING"
     
     def test_context_cleared_on_idle(self):
-        """Перевіряє очищення контексту при поверненні в IDLE."""
+        """Tests context clearing when returning to IDLE."""
         sm = ConfirmationStateMachine()
         
         sm.context.transcribed_text = "test command"

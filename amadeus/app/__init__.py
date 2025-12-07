@@ -1,7 +1,7 @@
 """
 Amadeus Application Layer Package
 
-Оркестрація та управління пайплайном обробки команд.
+Orchestration and management of command processing pipeline.
 """
 
 from amadeus.app.pipeline import VoicePipeline

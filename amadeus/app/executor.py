@@ -1,13 +1,13 @@
 """
 Amadeus Action Executor
 
-Виконавець дій — останній етап пайплайну.
-Виконує затверджені ActionPlan через відповідні адаптери.
+Executor actions - last stage of the pipeline.
+Executes approved ActionPlan through appropriate adapters.
 
-Безпека:
-- Pre-execution validation для кожної дії
-- Таймаути на виконання
-- Детальне логування результатів
+Security:
+- Pre-execution validation for each action
+- Execution timeouts
+- Detailed logging of results
 """
 
 from __future__ import annotations
@@ -31,40 +31,42 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ExecutorConfig:
-    """Конфігурація виконавця."""
-    
-    # Таймаути
+    """Executor configuration."""
+
+    # Timeouts
     action_timeout_seconds: float = 30.0
     total_timeout_seconds: float = 120.0
-    
-    # Безпека
+
+    # Security
     validate_before_execution: bool = True
     stop_on_first_error: bool = True
-    
-    # Логування
+
+    # Logging
     log_outputs: bool = True
     max_output_length: int = 10000
 
 
 class ActionExecutor:
     """
-    Виконавець дій.
+    Executor actions.
+
+    Executes ActionPlan through appropriate OS adapters.
+    Each action undergoes pre-execution validation.
+
+    Example:
+    ```python
+    from amadeus.adapters.os import get_os_adapter
     
-    Виконує ActionPlan через відповідні OS адаптери.
-    Кожна дія проходить pre-execution validation.
+    adapter = get_os_adapter()
+    executor = ActionExecutor(adapter)
     
-    Приклад використання:
-        from amadeus.adapters.os import get_os_adapter
-        
-        adapter = get_os_adapter()
-        executor = ActionExecutor(adapter)
-        
-        results = executor.execute_plan(plan)
-        for result in results:
-            if result.is_success:
-                print(f"✓ {result.action.description}")
-            else:
-                print(f"✗ {result.action.description}: {result.error}")
+    results = executor.execute_plan(plan)
+    for result in results:
+        if result.is_success:
+            print(f"✓ {result.action.description}")
+        else:
+            print(f"✗ {result.action.description}: {result.error}")
+    ```
     """
 
     def __init__(
@@ -76,7 +78,7 @@ class ActionExecutor:
         self.config = config or ExecutorConfig()
         self.validator = PreExecutionValidator()
         
-        # Mapping tool_name → adapter method group
+        # Mapping tool_name -> adapter method group
         self._tool_handlers: Dict[str, Any] = {
             "filesystem": self.os_adapter,
             "process": self.os_adapter,
@@ -86,13 +88,13 @@ class ActionExecutor:
 
     def execute_plan(self, plan: ActionPlan) -> List[ExecutionResult]:
         """
-        Виконує план дій.
-        
+        Executes action plan.
+
         Args:
-            plan: План для виконання
-            
+            plan: Plan to execute
+
         Returns:
-            Список результатів для кожної дії
+            List of results for each action
         """
         if plan.is_empty:
             return []
@@ -105,10 +107,10 @@ class ActionExecutor:
         for action in plan.actions:
             result = self._execute_action(action)
             results.append(result)
-            
-            # Зупиняємось при помилці якщо налаштовано
+
+            # Stop on error if configured
             if not result.is_success and self.config.stop_on_first_error:
-                # Додаємо CANCELLED для решти дій
+                # Add CANCELLED for remaining actions
                 remaining = plan.actions[len(results):]
                 for remaining_action in remaining:
                     results.append(ExecutionResult(
@@ -121,11 +123,11 @@ class ActionExecutor:
         return results
 
     def execute_single(self, action: Action) -> ExecutionResult:
-        """Виконує одну дію."""
+        """Executes a single action."""
         return self._execute_action(action)
 
     def _execute_action(self, action: Action) -> ExecutionResult:
-        """Виконує одну дію з валідацією."""
+        """Executes a single action with validation."""
         start_time = datetime.now(timezone.utc)
         
         # Pre-execution validation
@@ -141,7 +143,7 @@ class ActionExecutor:
                 )
         
         try:
-            # Отримуємо handler
+            # Retrieve handler
             handler = self._tool_handlers.get(action.tool_name)
             if handler is None:
                 return ExecutionResult(
@@ -151,8 +153,8 @@ class ActionExecutor:
                     started_at=start_time,
                     completed_at=datetime.now(timezone.utc),
                 )
-            
-            # Отримуємо метод
+
+            # Retrieve method
             method = getattr(handler, action.function_name, None)
             if method is None:
                 return ExecutionResult(
@@ -163,11 +165,11 @@ class ActionExecutor:
                     completed_at=datetime.now(timezone.utc),
                 )
             
-            # Виконуємо
+            # Execute action
             logger.info(f"Executing: {action.to_human_readable()}")
             output = method(**action.args)
-            
-            # Обрізаємо вихід якщо потрібно
+
+            # Cut output if needed
             if self.config.log_outputs and output is not None:
                 output_str = str(output)
                 if len(output_str) > self.config.max_output_length:
@@ -210,11 +212,11 @@ class ActionExecutor:
             )
 
     def _simulate_plan(self, plan: ActionPlan) -> List[ExecutionResult]:
-        """Симулює виконання плану (dry run)."""
+        """Simulates execution of the plan (dry run)."""
         results = []
         
         for action in plan.actions:
-            # Валідація працює і в dry run
+            # Validation works in dry run
             if self.config.validate_before_execution:
                 validation = self.validator.validate_action(action)
                 if not validation.allowed:
@@ -239,11 +241,11 @@ class ActionExecutor:
 # ============================================
 
 class ExecutionResultFormatter:
-    """Форматує результати виконання для UI."""
+    """Formats execution results for UI."""
 
     @staticmethod
     def to_text(results: List[ExecutionResult]) -> str:
-        """Форматує результати у текст."""
+        """Formats results as text."""
         if not results:
             return "No actions executed."
         
@@ -284,7 +286,7 @@ class ExecutionResultFormatter:
 
     @staticmethod
     def to_dict(results: List[ExecutionResult]) -> Dict[str, Any]:
-        """Форматує результати у словник."""
+        """Formats results as a dictionary."""
         return {
             "total": len(results),
             "successful": sum(1 for r in results if r.is_success),

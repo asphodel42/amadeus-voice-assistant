@@ -1,7 +1,7 @@
 """
 Unit Tests for Core Entities
 
-Тести для доменних сутностей.
+Tests for domain entities.
 """
 
 import pytest
@@ -23,20 +23,20 @@ from amadeus.core.entities import (
 
 
 class TestRiskLevel:
-    """Тести для RiskLevel."""
-    
+    """Tests for RiskLevel."""
+
     def test_risk_ordering(self):
-        """Перевіряє порядок рівнів ризику."""
+        """Tests the ordering of risk levels."""
         assert RiskLevel.SAFE.value < RiskLevel.MEDIUM.value
         assert RiskLevel.MEDIUM.value < RiskLevel.HIGH.value
         assert RiskLevel.HIGH.value < RiskLevel.DESTRUCTIVE.value
 
 
 class TestIntent:
-    """Тести для Intent."""
-    
+    """Tests for Intent."""
+
     def test_intent_creation(self):
-        """Перевіряє створення Intent."""
+        """Tests the creation of Intent."""
         intent = Intent(
             intent_type=IntentType.OPEN_APP,
             slots={"app_name": "calculator"},
@@ -49,14 +49,14 @@ class TestIntent:
         assert not intent.is_unknown
     
     def test_unknown_intent(self):
-        """Перевіряє невідомий Intent."""
+        """Tests the unknown Intent."""
         intent = Intent(intent_type=IntentType.UNKNOWN)
         
         assert intent.is_unknown
         assert intent.confidence == 1.0  # default
     
     def test_invalid_confidence(self):
-        """Перевіряє валідацію confidence."""
+        """Tests the validation of confidence."""
         with pytest.raises(ValueError):
             Intent(intent_type=IntentType.OPEN_APP, confidence=1.5)
         
@@ -64,7 +64,7 @@ class TestIntent:
             Intent(intent_type=IntentType.OPEN_APP, confidence=-0.1)
     
     def test_get_slot(self):
-        """Перевіряє отримання слотів."""
+        """Tests the retrieval of slots."""
         intent = Intent(
             intent_type=IntentType.OPEN_APP,
             slots={"app_name": "notepad"},
@@ -76,10 +76,10 @@ class TestIntent:
 
 
 class TestAction:
-    """Тести для Action."""
-    
+    """Tests for Action."""
+
     def test_action_creation(self):
-        """Перевіряє створення Action."""
+        """Tests the creation of Action."""
         action = Action(
             tool_name="filesystem",
             function_name="list_dir",
@@ -94,7 +94,7 @@ class TestAction:
         assert not action.requires_confirmation
     
     def test_high_risk_auto_confirmation(self):
-        """Перевіряє автоматичне підтвердження для HIGH ризику."""
+        """Tests automatic confirmation for HIGH risk."""
         action = Action(
             tool_name="filesystem",
             function_name="write_file",
@@ -105,7 +105,7 @@ class TestAction:
         assert action.requires_confirmation
     
     def test_destructive_auto_confirmation(self):
-        """Перевіряє автоматичне підтвердження для DESTRUCTIVE."""
+        """Tests automatic confirmation for DESTRUCTIVE."""
         action = Action(
             tool_name="filesystem",
             function_name="delete_path",
@@ -116,7 +116,7 @@ class TestAction:
         assert action.requires_confirmation
     
     def test_human_readable(self):
-        """Перевіряє генерацію людино-читабельного опису."""
+        """Tests the generation of human-readable description."""
         action = Action(
             tool_name="browser",
             function_name="open_url",
@@ -125,8 +125,8 @@ class TestAction:
         )
         
         assert action.to_human_readable() == "Open URL in browser"
-        
-        # Без опису
+
+        # Without description
         action2 = Action(
             tool_name="test",
             function_name="func",
@@ -136,17 +136,17 @@ class TestAction:
 
 
 class TestActionPlan:
-    """Тести для ActionPlan."""
-    
+    """Tests for ActionPlan."""
+
     def test_empty_plan(self):
-        """Перевіряє порожній план."""
+        """Tests the empty plan."""
         plan = ActionPlan()
         
         assert plan.is_empty
         assert plan.max_risk == RiskLevel.SAFE
     
     def test_plan_with_actions(self):
-        """Перевіряє план з діями."""
+        """Tests the plan with actions."""
         actions = [
             Action(tool_name="fs", function_name="read", risk=RiskLevel.SAFE),
             Action(tool_name="fs", function_name="write", risk=RiskLevel.HIGH),
@@ -159,7 +159,7 @@ class TestActionPlan:
         assert plan.max_risk == RiskLevel.HIGH
     
     def test_preview_text(self):
-        """Перевіряє генерацію тексту попереднього перегляду."""
+        """Tests the generation of preview text."""
         intent = Intent(intent_type=IntentType.LIST_DIR)
         actions = [
             Action(
@@ -178,10 +178,10 @@ class TestActionPlan:
 
 
 class TestAuditEvent:
-    """Тести для AuditEvent."""
-    
+    """Tests for AuditEvent."""
+
     def test_event_creation(self):
-        """Перевіряє створення події."""
+        """Tests the creation of event."""
         event = AuditEvent(
             event_type="command",
             actor="user",
@@ -193,27 +193,27 @@ class TestAuditEvent:
         assert event.metadata["source"] == "voice"
     
     def test_hash_computation(self):
-        """Перевіряє обчислення хешу."""
+        """Tests the hash computation."""
         event = AuditEvent(
             event_type="test",
             actor="system",
         )
         
         hash1 = event.compute_hash()
-        
-        # Той самий об'єкт має давати той самий хеш
+
+        # The same object should produce the same hash
         hash2 = event.compute_hash()
         assert hash1 == hash2
-        
-        # Хеш має бути 64 символи (SHA-256)
+
+        # Hash should be 64 characters (SHA-256)
         assert len(hash1) == 64
 
 
 class TestCapability:
-    """Тести для Capability."""
+    """Tests for Capability."""
     
     def test_capability_creation(self):
-        """Перевіряє створення Capability."""
+        """Tests the creation of Capability."""
         cap = Capability(
             scope=CapabilityScope.FS_READ,
             constraints={"allowed_paths": ["~/Documents"]},
@@ -223,13 +223,13 @@ class TestCapability:
         assert "allowed_paths" in cap.constraints
     
     def test_allows_path_no_constraints(self):
-        """Перевіряє дозвіл шляху без обмежень."""
+        """Tests path allowance without constraints."""
         cap = Capability(scope=CapabilityScope.FS_READ)
         
         assert cap.allows_path("/any/path")
     
     def test_allows_path_with_constraints(self):
-        """Перевіряє дозвіл шляху з обмеженнями."""
+        """Tests path allowance with constraints."""
         import os
         from pathlib import Path
         
@@ -240,19 +240,19 @@ class TestCapability:
             scope=CapabilityScope.FS_READ,
             constraints={"allowed_paths": [docs]},
         )
-        
-        # Шлях всередині дозволеної директорії
+
+        # Path inside allowed directory
         assert cap.allows_path(os.path.join(docs, "test.txt"))
-        
-        # Шлях поза дозволеною директорією
+
+        # Path outside allowed directory
         assert not cap.allows_path("/etc/passwd")
 
 
 class TestExecutionResult:
-    """Тести для ExecutionResult."""
+    """Tests for ExecutionResult."""
     
     def test_success_result(self):
-        """Перевіряє успішний результат."""
+        """Tests the successful result."""
         action = Action(tool_name="test", function_name="func")
         result = ExecutionResult(
             action=action,
@@ -265,7 +265,7 @@ class TestExecutionResult:
         assert result.error is None
     
     def test_failed_result(self):
-        """Перевіряє невдалий результат."""
+        """Tests the failed result."""
         action = Action(tool_name="test", function_name="func")
         result = ExecutionResult(
             action=action,
@@ -277,11 +277,11 @@ class TestExecutionResult:
         assert result.error == "Something went wrong"
     
     def test_duration_calculation(self):
-        """Перевіряє обчислення тривалості."""
+        """Tests the duration calculation."""
         action = Action(tool_name="test", function_name="func")
         
         start = datetime.now(timezone.utc)
-        # Імітуємо затримку (у реальності це б було time.sleep)
+        # Simulate delay (in reality this would be time.sleep)
         end = datetime.now(timezone.utc)
         
         result = ExecutionResult(

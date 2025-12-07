@@ -1,13 +1,13 @@
 """
 Amadeus Voice Pipeline
 
-Головний оркестратор обробки голосових команд.
-Координує всі етапи: Wake → ASR → NLU → Plan → Policy → Confirm → Execute → Respond
+Main orchestrator for processing voice commands.
+Coordinates all stages: Wake -> ASR -> NLU -> Plan -> Policy -> Confirm -> Execute -> Respond
 
-Принципи:
-- Детермінована поведінка через State Machine
-- Кожен етап ізольований та тестований
-- Явне логування для аудиту
+Principles:
+- Deterministic behavior through State Machine
+- Each stage is isolated and testable
+- Explicit logging for audit
 """
 
 from __future__ import annotations
@@ -41,27 +41,27 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PipelineConfig:
-    """Конфігурація пайплайну."""
-    
-    # Таймаути
+    """Configuration for the pipeline."""
+
+    # Timeouts
     listening_timeout_seconds: float = 10.0
     confirmation_timeout_seconds: float = 30.0
     execution_timeout_seconds: float = 60.0
-    
-    # Режими
+
+    # Modes
     dry_run_by_default: bool = False
     auto_confirm_safe: bool = True
     require_wake_word: bool = True
-    
-    # Логування
+
+    # Logging
     log_all_events: bool = True
     verbose_logging: bool = False
 
 
 @dataclass
 class PipelineResult:
-    """Результат обробки команди."""
-    
+    """Result of command processing."""
+
     success: bool
     request: Optional[CommandRequest] = None
     intent: Optional[Intent] = None
@@ -76,37 +76,39 @@ class PipelineResult:
         return self.intent is not None and self.intent.is_unknown
 
 
-# Типи для callbacks
+# Types for callbacks
 PipelineCallback = Callable[["VoicePipeline", str, Any], None]
 
 
 class VoicePipeline:
     """
-    Головний пайплайн обробки голосових команд.
-    
-    Послідовність обробки:
-    1. Wake Word Detection (опціонально)
+    Main pipeline for processing voice commands.
+
+    Processing sequence:
+    1. Wake Word Detection (optional)
     2. Audio Recording
     3. ASR (Speech-to-Text)
     4. NLU (Intent Recognition)
-    5. Planning (Intent → ActionPlan)
+    5. Planning (Intent -> ActionPlan)
     6. Policy Evaluation (Security Check)
     7. Confirmation (якщо потрібно)
     8. Execution
     9. Response
+
+    Example:
+    ```python
+    pipeline = VoicePipeline()
+
+    # Register callbacks
+    pipeline.on("plan_ready", lambda p, e, d: show_plan(d))
+    pipeline.on("confirmation_needed", lambda p, e, d: ask_user(d))
+
+    # Process text command (for testing)
+    result = pipeline.process_text("open calculator")
     
-    Приклад використання:
-        pipeline = VoicePipeline()
-        
-        # Реєструємо callbacks
-        pipeline.on("plan_ready", lambda p, e, d: show_plan(d))
-        pipeline.on("confirmation_needed", lambda p, e, d: ask_user(d))
-        
-        # Обробляємо текстову команду (для тестування)
-        result = pipeline.process_text("open calculator")
-        
-        if result.success:
-            print(f"Executed: {result.plan.to_preview_text()}")
+    if result.success:
+        print(f"Executed: {result.plan.to_preview_text()}")
+    ```
     """
 
     def __init__(
@@ -119,16 +121,16 @@ class VoicePipeline:
         self.state_machine = ConfirmationStateMachine()
         self.planner = planner or Planner()
         self.policy_engine = policy_engine or PolicyEngine()
-        
-        # Callbacks для різних подій
+
+        # Callbacks for various events
         self._callbacks: Dict[str, List[PipelineCallback]] = {}
-        
-        # Адаптери (ініціалізуються лениво)
+
+        # Adapters (initialized lazily)
         self._nlu = None
         self._os_adapter = None
         self._audit = None
-        
-        # Лічильник сесій
+
+        # Session counter
         self._session_counter = 0
 
     # ============================================
@@ -142,29 +144,29 @@ class VoicePipeline:
         skip_confirmation: bool = False,
     ) -> PipelineResult:
         """
-        Обробляє текстову команду (bypass ASR).
-        
-        Використовується для тестування та текстового вводу.
-        
+        Processes text command (bypass ASR).
+
+        Used for testing and text input.
+
         Args:
-            text: Текст команди
-            dry_run: Якщо True, тільки симуляція без виконання
-            skip_confirmation: Пропустити підтвердження (для тестів)
-            
+            text: Text of the command
+            dry_run: If True, only simulate without execution
+            skip_confirmation: Skip confirmation (for tests)
+
         Returns:
-            Результат обробки
+            Processing result
         """
         start_time = datetime.now(timezone.utc)
         
         try:
-            # Створюємо запит
+            # Create request
             request = CommandRequest(
                 request_id=self._generate_session_id(),
                 raw_text=text,
                 source="text_input",
             )
-            
-            # Логуємо початок
+
+            # Log start
             self._emit("command_received", {"request": request})
             self._log_audit("command_received", request=request)
             
@@ -219,14 +221,14 @@ class VoicePipeline:
                     duration_ms=self._calc_duration(start_time),
                 )
             
-            # Confirmation (якщо потрібно)
+            # Confirmation (if needed)
             if decision.requires_confirmation and not skip_confirmation:
                 self._emit("confirmation_needed", {
                     "plan": plan,
                     "decision": decision,
                 })
-                # У реальному UI тут буде очікування відповіді
-                # Для тестів — автоматично підтверджуємо
+                # In real UI there will be waiting for response
+                # For tests — automatically confirm
                 logger.info(f"Confirmation required for plan: {plan.plan_id}")
             
             # Execution
@@ -237,8 +239,8 @@ class VoicePipeline:
             
             self._emit("execution_complete", {"results": results})
             self._log_audit("execution_complete", request=request, plan=plan)
-            
-            # Перевіряємо успішність
+
+            # Check success
             all_success = all(r.is_success for r in results)
             
             return PipelineResult(
@@ -261,11 +263,11 @@ class VoicePipeline:
             )
 
     def get_state(self) -> AssistantState:
-        """Повертає поточний стан асистента."""
+        """Returns the current state of the assistant."""
         return self.state_machine.state
 
     def reset(self) -> None:
-        """Скидає стан пайплайну."""
+        """Resets the pipeline state."""
         self.state_machine.force_reset()
         self._emit("reset", {})
 
@@ -275,24 +277,24 @@ class VoicePipeline:
 
     def on(self, event: str, callback: PipelineCallback) -> None:
         """
-        Реєструє callback для події.
-        
-        Події:
-        - command_received: Отримано команду
-        - intent_recognized: Розпізнано намір
-        - plan_ready: Готовий план дій
-        - policy_evaluated: Оцінено політику
-        - confirmation_needed: Потрібне підтвердження
-        - execution_complete: Виконання завершено
-        - error: Помилка
-        - reset: Скидання стану
+        Registers a callback for an event.
+
+        Events:
+        - command_received: Command received
+        - intent_recognized: Intent recognized
+        - plan_ready: Plan ready
+        - policy_evaluated: Policy evaluated
+        - confirmation_needed: Confirmation needed
+        - execution_complete: Execution complete
+        - error: Error
+        - reset: Reset
         """
         if event not in self._callbacks:
             self._callbacks[event] = []
         self._callbacks[event].append(callback)
 
     def off(self, event: str, callback: PipelineCallback) -> bool:
-        """Видаляє callback."""
+        """Removes a callback."""
         if event in self._callbacks:
             try:
                 self._callbacks[event].remove(callback)
@@ -302,7 +304,7 @@ class VoicePipeline:
         return False
 
     def _emit(self, event: str, data: Dict[str, Any]) -> None:
-        """Викликає всі callbacks для події."""
+        """Calls all callbacks for an event."""
         if event in self._callbacks:
             for callback in self._callbacks[event]:
                 try:
@@ -315,7 +317,7 @@ class VoicePipeline:
     # ============================================
 
     def _parse_intent(self, text: str) -> Intent:
-        """Парсить текст у Intent."""
+        """Parses text into Intent."""
         if self._nlu is None:
             from amadeus.adapters.voice.nlu import DeterministicNLU
             self._nlu = DeterministicNLU()
@@ -323,7 +325,7 @@ class VoicePipeline:
         return self._nlu.parse(text)
 
     def _execute_plan(self, plan: ActionPlan) -> List[ExecutionResult]:
-        """Виконує план дій."""
+        """Executes the action plan."""
         from amadeus.app.executor import ActionExecutor
         
         if self._os_adapter is None:
@@ -334,7 +336,7 @@ class VoicePipeline:
         return executor.execute_plan(plan)
 
     def _simulate_plan(self, plan: ActionPlan) -> List[ExecutionResult]:
-        """Симулює план (dry run)."""
+        """Simulates the action plan (dry run)."""
         results = []
         for action in plan.actions:
             results.append(ExecutionResult(
@@ -350,7 +352,7 @@ class VoicePipeline:
         request: Optional[CommandRequest] = None,
         plan: Optional[ActionPlan] = None,
     ) -> None:
-        """Логує подію в аудит."""
+        """Logs an event to the audit log."""
         if not self.config.log_all_events:
             return
         
@@ -394,14 +396,14 @@ def create_pipeline(
     verbose: bool = False,
 ) -> VoicePipeline:
     """
-    Створює налаштований пайплайн.
-    
+    Creates a configured pipeline.
+
     Args:
-        dry_run: Режим симуляції
-        verbose: Детальне логування
-        
+        dry_run: Simulation mode
+        verbose: Detailed logging
+
     Returns:
-        Налаштований VoicePipeline
+        Configured VoicePipeline
     """
     config = PipelineConfig(
         dry_run_by_default=dry_run,
