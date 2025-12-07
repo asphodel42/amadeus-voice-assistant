@@ -1,8 +1,8 @@
 """
 Amadeus OS Adapters Package
 
-Адаптери для взаємодії з операційною системою.
-Реалізують порти, визначені в core/ports.py.
+Adapter for interacting with the operating system.
+Implements the ports defined in core/ports.py.
 """
 
 from amadeus.adapters.os.factory import get_os_adapter, OSAdapterFactory

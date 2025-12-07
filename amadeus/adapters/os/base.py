@@ -1,8 +1,8 @@
 """
 Base OS Adapter
 
-Базовий клас для OS-специфічних адаптерів.
-Містить спільну логіку та інтерфейс.
+Base class for OS-specific adapters.
+Contains shared logic and interface.
 """
 
 from __future__ import annotations
@@ -15,22 +15,22 @@ from typing import Any, Dict, List, Optional, Set
 
 class BaseOSAdapter(ABC):
     """
-    Базовий клас для адаптерів операційної системи.
-    
-    Реалізує спільну логіку перевірки безпеки та надає
-    абстрактні методи для OS-специфічних реалізацій.
+    Base class for OS-specific adapters.
+
+    Contains shared logic for security checks and provides
+    abstract methods for OS-specific implementations.
     """
 
     def __init__(self) -> None:
-        # Дозволені директорії для файлових операцій
+        # Allowed directories for file operations
         self._allowed_directories: Set[Path] = set()
         self._init_default_allowed_directories()
-        
-        # Білий список додатків
+
+        # Whitelist of allowed apps
         self._allowed_apps: Dict[str, str] = {}
         self._init_default_allowed_apps()
-        
-        # Пошукові системи
+
+        # Search engines
         self._search_engines: Dict[str, str] = {
             "default": "https://duckduckgo.com/?q={}",
             "duckduckgo": "https://duckduckgo.com/?q={}",
@@ -38,21 +38,21 @@ class BaseOSAdapter(ABC):
         }
 
     def _init_default_allowed_directories(self) -> None:
-        """Ініціалізує дозволені директорії за замовчуванням."""
+        """Init allowed directories by default."""
         home = Path.home()
         self._allowed_directories = {
             home / "Documents",
             home / "Downloads",
             home / "Desktop",
         }
-        
-        # Створюємо директорії якщо не існують
+
+        # Create directories if they don't exist
         for directory in self._allowed_directories:
             directory.mkdir(parents=True, exist_ok=True)
 
     @abstractmethod
     def _init_default_allowed_apps(self) -> None:
-        """Ініціалізує білий список додатків (OS-специфічно)."""
+        """Init whitelist of allowed apps (OS-specific)."""
         ...
 
     # ============================================
@@ -61,19 +61,19 @@ class BaseOSAdapter(ABC):
 
     def is_path_allowed(self, path: str, operation: str = "read") -> bool:
         """
-        Перевіряє, чи дозволена операція для шляху.
-        
+        Checks if the operation is allowed for the path.
+
         Args:
-            path: Шлях для перевірки
-            operation: Тип операції (read, write, delete)
-            
+            path: Path to check
+            operation: Type of operation (read, write, delete)
+
         Returns:
-            True якщо дозволено
+            True if allowed
         """
         try:
             target = Path(path).expanduser().resolve()
-            
-            # Перевіряємо, чи шлях всередині дозволених директорій
+
+            # Check if the path is within allowed directories
             for allowed in self._allowed_directories:
                 try:
                     target.relative_to(allowed)
@@ -86,7 +86,7 @@ class BaseOSAdapter(ABC):
             return False
 
     def add_allowed_directory(self, path: str) -> bool:
-        """Додає директорію до дозволених."""
+        """Adds a directory to the allowed list."""
         try:
             directory = Path(path).expanduser().resolve()
             if directory.is_dir():
@@ -97,7 +97,7 @@ class BaseOSAdapter(ABC):
             return False
 
     def remove_allowed_directory(self, path: str) -> bool:
-        """Видаляє директорію з дозволених."""
+        """Removes a directory from the allowed list."""
         try:
             directory = Path(path).expanduser().resolve()
             self._allowed_directories.discard(directory)
@@ -106,7 +106,7 @@ class BaseOSAdapter(ABC):
             return False
 
     def get_allowed_directories(self) -> List[str]:
-        """Повертає список дозволених директорій."""
+        """Returns a list of allowed directories."""
         return [str(d) for d in self._allowed_directories]
 
     # ============================================
@@ -114,11 +114,11 @@ class BaseOSAdapter(ABC):
     # ============================================
 
     def is_app_allowed(self, app_name: str) -> bool:
-        """Перевіряє, чи додаток у білому списку."""
+        """Checks if the app is in the whitelist."""
         return app_name.lower() in self._allowed_apps
 
     def get_app_path(self, app_name: str) -> Optional[Path]:
-        """Отримує повний шлях до додатку."""
+        """Gets the full path to the app."""
         app_key = app_name.lower()
         if app_key in self._allowed_apps:
             path_str = self._allowed_apps[app_key]
@@ -127,11 +127,11 @@ class BaseOSAdapter(ABC):
         return None
 
     def add_allowed_app(self, name: str, path: str = "") -> None:
-        """Додає додаток до білого списку."""
+        """Adds an app to the whitelist."""
         self._allowed_apps[name.lower()] = path
 
     def get_allowed_apps(self) -> List[str]:
-        """Повертає список дозволених додатків."""
+        """Returns a list of allowed apps."""
         return list(self._allowed_apps.keys())
 
     # ============================================
@@ -140,31 +140,31 @@ class BaseOSAdapter(ABC):
 
     @abstractmethod
     def list_dir(self, path: str) -> List[Dict[str, Any]]:
-        """Повертає список файлів та папок."""
+        """Returns a list of files and folders."""
         ...
 
     @abstractmethod
     def read_file(self, path: str, max_bytes: int = 10240) -> str:
-        """Читає вміст файлу."""
+        """Reads the contents of a file."""
         ...
 
     @abstractmethod
     def create_file(self, path: str, content: str = "") -> bool:
-        """Створює новий файл."""
+        """Creates a new file."""
         ...
 
     @abstractmethod
     def write_file(self, path: str, content: str, overwrite: bool = False) -> bool:
-        """Записує вміст у файл."""
+        """Writes content to a file."""
         ...
 
     @abstractmethod
     def delete_path(self, path: str, recursive: bool = False) -> bool:
-        """Видаляє файл або папку."""
+        """Deletes a file or folder."""
         ...
 
     def path_exists(self, path: str) -> bool:
-        """Перевіряє, чи існує шлях."""
+        """Checks if a path exists."""
         try:
             return Path(path).expanduser().exists()
         except Exception:
@@ -176,7 +176,7 @@ class BaseOSAdapter(ABC):
 
     @abstractmethod
     def open_app(self, app_name: str, args: Optional[List[str]] = None) -> bool:
-        """Відкриває додаток."""
+        """Opens the app."""
         ...
 
     # ============================================
@@ -185,11 +185,11 @@ class BaseOSAdapter(ABC):
 
     @abstractmethod
     def open_url(self, url: str) -> bool:
-        """Відкриває URL у браузері."""
+        """Opens the URL in the browser."""
         ...
 
     def search_web(self, query: str, engine: str = "default") -> bool:
-        """Виконує пошук у вебі."""
+        """Performs a web search."""
         url_template = self._search_engines.get(engine, self._search_engines["default"])
         # URL encode query
         from urllib.parse import quote_plus
@@ -197,7 +197,7 @@ class BaseOSAdapter(ABC):
         return self.open_url(url)
 
     def is_url_safe(self, url: str) -> bool:
-        """Перевіряє безпечність URL."""
+        """Checks if the URL is safe."""
         url_lower = url.lower()
         return url_lower.startswith("https://") or url_lower.startswith("http://localhost")
 
@@ -207,15 +207,15 @@ class BaseOSAdapter(ABC):
 
     @abstractmethod
     def get_system_info(self) -> Dict[str, Any]:
-        """Повертає інформацію про систему."""
+        """Returns information about the system."""
         ...
 
     @abstractmethod
     def get_memory_info(self) -> Dict[str, int]:
-        """Повертає інформацію про пам'ять."""
+        """Returns information about memory."""
         ...
 
     @abstractmethod
     def get_disk_info(self) -> List[Dict[str, Any]]:
-        """Повертає інформацію про диски."""
+        """Returns information about disks."""
         ...

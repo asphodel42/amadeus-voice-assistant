@@ -1,8 +1,8 @@
 """
 OS Adapter Factory
 
-Фабрика для створення OS-специфічних адаптерів.
-Автоматично визначає операційну систему та повертає відповідний адаптер.
+Factory for creating OS-specific adapters.
+Automatically detects the operating system and returns the appropriate adapter.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 class OSAdapterFactory:
     """
-    Фабрика адаптерів операційної системи.
-    
-    Приклад використання:
+    Factory for creating OS-specific adapters.
+
+    Example usage:
         adapter = OSAdapterFactory.create()
         files = adapter.list_dir("~/Documents")
     """
@@ -28,13 +28,13 @@ class OSAdapterFactory:
     @classmethod
     def create(cls) -> "BaseOSAdapter":
         """
-        Створює адаптер для поточної операційної системи.
-        
+        Creates an adapter for the current operating system.
+
         Returns:
-            Екземпляр адаптера (WindowsAdapter або LinuxAdapter)
-            
+            An instance of the adapter (WindowsAdapter or LinuxAdapter)
+
         Raises:
-            NotImplementedError: Для непідтримуваних ОС
+            NotImplementedError: For unsupported OS
         """
         if sys.platform == "win32":
             from amadeus.adapters.os.windows import WindowsAdapter
@@ -43,7 +43,7 @@ class OSAdapterFactory:
             from amadeus.adapters.os.linux import LinuxAdapter
             return LinuxAdapter()
         elif sys.platform == "darwin":
-            # macOS — архітектурно готові, але не реалізовано
+            # macOS — architecture ready, but not implemented
             raise NotImplementedError(
                 "macOS is not yet supported. "
                 "Architecture is ready for future implementation."
@@ -54,9 +54,9 @@ class OSAdapterFactory:
     @classmethod
     def get_singleton(cls) -> "BaseOSAdapter":
         """
-        Повертає singleton екземпляр адаптера.
-        
-        Використовується для глобального доступу до адаптера ОС.
+        Returns the singleton instance of the adapter.
+
+        Used for global access to the OS adapter.
         """
         if cls._instance is None:
             cls._instance = cls.create()
@@ -64,15 +64,15 @@ class OSAdapterFactory:
 
     @classmethod
     def reset_singleton(cls) -> None:
-        """Скидає singleton (для тестування)."""
+        """Resets the singleton instance (for testing)."""
         cls._instance = None
 
 
 def get_os_adapter() -> "BaseOSAdapter":
     """
-    Зручна функція для отримання OS адаптера.
-    
+    Function to get the OS adapter.
+
     Returns:
-        Singleton екземпляр адаптера
+        Singleton instance of the adapter
     """
     return OSAdapterFactory.get_singleton()

@@ -19,33 +19,374 @@ from amadeus.adapters.os.base import BaseOSAdapter
 
 class WindowsAdapter(BaseOSAdapter):
     """
-    Адаптер для Windows.
-    
-    Реалізує всі OS-специфічні операції для Windows 10/11.
+    Adapter for Windows.
+
+    Implements all OS-specific operations for Windows 10/11.
     """
 
     def _init_default_allowed_apps(self) -> None:
-        """Ініціалізує білий список додатків для Windows."""
+        """Initializes the whitelist of allowed apps for Windows."""
         self._allowed_apps = {
-            # Системні утиліти
+            # ============================================
+            # Windows Built-in Utilities
+            # ============================================
             "notepad": "notepad.exe",
             "calculator": "calc.exe",
+            "calc": "calc.exe",
             "explorer": "explorer.exe",
+            "file explorer": "explorer.exe",
             "cmd": "cmd.exe",
+            "command prompt": "cmd.exe",
             "powershell": "powershell.exe",
+            "pwsh": "pwsh.exe",
             "terminal": "wt.exe",  # Windows Terminal
-            
-            # Браузери (шляхи визначаються динамічно)
-            "browser": "",  # Системний браузер за замовчуванням
-            "edge": "msedge.exe",
-            
-            # Офісні додатки (базові)
+            "windows terminal": "wt.exe",
             "paint": "mspaint.exe",
+            "mspaint": "mspaint.exe",
             "wordpad": "wordpad.exe",
+            "task manager": "taskmgr.exe",
+            "taskmgr": "taskmgr.exe",
+            "device manager": "devmgmt.msc",
+            "disk management": "diskmgmt.msc",
+            "services": "services.msc",
+            "event viewer": "eventvwr.exe",
+            "registry editor": "regedit.exe",
+            "regedit": "regedit.exe",
+            "settings": "ms-settings:",
+            "control panel": "control.exe",
             
-            # Медіа
+            # ============================================
+            # Web Browsers
+            # ============================================
+            "browser": "",  # System default browser
+            "firefox": "firefox.exe",
+            "chrome": "chrome.exe",
+            "google chrome": "chrome.exe",
+            "chromium": "chromium.exe",
+            "edge": "msedge.exe",
+            "microsoft edge": "msedge.exe",
+            "safari": "safari.exe",
+            "opera": "opera.exe",
+            "brave": "brave.exe",
+            "vivaldi": "vivaldi.exe",
+            "tor": "tor.exe",
+            "torbrowser": "tor-browser.exe",
+            
+            # ============================================
+            # Development & Code Editors
+            # ============================================
+            "code": "code.exe",
+            "vscode": "code.exe",
+            "visual studio code": "code.exe",
+            "sublime": "subl.exe",
+            "sublime text": "subl.exe",
+            "sublime text 3": "subl.exe",
+            "atom": "atom.exe",
+            "vim": "vim.exe",
+            "gvim": "gvim.exe",
+            "emacs": "emacs.exe",
+            "notepad++": "notepad++.exe",
+            "pycharm": "pycharm.exe",
+            "pycharm professional": "pycharm.exe",
+            "pycharm community": "pycharm.exe",
+            "webstorm": "webstorm.exe",
+            "intellij": "idea.exe",
+            "intellij idea": "idea.exe",
+            "rider": "rider.exe",
+            "clion": "clion.exe",
+            "goland": "goland.exe",
+            "android studio": "studio.exe",
+            "visual studio": "devenv.exe",
+            "vs": "devenv.exe",
+            "netbeans": "netbeans.exe",
+            "eclipse": "eclipse.exe",
+            "codeblocks": "codeblocks.exe",
+            "qt creator": "qtcreator.exe",
+            "lazarus": "lazarus.exe",
+            
+            # ============================================
+            # Office & Productivity
+            # ============================================
+            "word": "winword.exe",
+            "excel": "excel.exe",
+            "powerpoint": "powerpnt.exe",
+            "access": "msaccess.exe",
+            "outlook": "outlook.exe",
+            "onenote": "onenote.exe",
+            "publisher": "mspub.exe",
+            "project": "winproj.exe",
+            "visio": "visio.exe",
+            "libreoffice": "libreoffice.exe",
+            "libreoffice writer": "libreoffice.exe",
+            "libreoffice calc": "libreoffice.exe",
+            "libreoffice impress": "libreoffice.exe",
+            "google docs": "chrome.exe",
+            "google sheets": "chrome.exe",
+            "google slides": "chrome.exe",
+            "openoffice": "openoffice.exe",
+            "abiword": "abiword.exe",
+            "gnumeric": "gnumeric.exe",
+            
+            # ============================================
+            # Communication & Social
+            # ============================================
+            "discord": "Discord.exe",
+            "telegram": "Telegram.exe",
+            "telegram desktop": "Telegram.exe",
+            "skype": "skype.exe",
+            "slack": "slack.exe",
+            "teams": "Teams.exe",
+            "microsoft teams": "Teams.exe",
+            "zoom": "zoom.exe",
+            "whatsapp": "WhatsApp.exe",
+            "viber": "Viber.exe",
+            "signal": "Signal.exe",
+            "wire": "wire.exe",
+            "google meet": "chrome.exe",
+            "hangouts": "chrome.exe",
+            "messenger": "Messenger.exe",
+            "twitch": "chrome.exe",
+            
+            # ============================================
+            # Media & Entertainment
+            # ============================================
+            "vlc": "vlc.exe",
+            "vlc media player": "vlc.exe",
+            "mpv": "mpv.exe",
+            "kodi": "kodi.exe",
+            "plex": "Plex Media Server.exe",
+            "spotify": "Spotify.exe",
+            "itunes": "iTunes.exe",
+            "apple music": "iTunes.exe",
+            "audacity": "audacity.exe",
+            "youtube": "chrome.exe",
+            "netflix": "chrome.exe",
+            "hulu": "chrome.exe",
+            "prime video": "chrome.exe",
+            "steam": "steam.exe",
+            "epic games": "EpicGamesLauncher.exe",
+            "epicgames": "EpicGamesLauncher.exe",
+            "origin": "Origin.exe",
+            "uplay": "uplay.exe",
+            "ubisoft": "uplay.exe",
+            "gog galaxy": "GOG Galaxy.exe",
+            "blender": "blender.exe",
+            "obs": "obs64.exe",
+            "obs studio": "obs64.exe",
+            "obs-studio": "obs64.exe",
+            "windows media player": "wmplayer.exe",
             "mediaplayer": "wmplayer.exe",
             "photos": "ms-photos:",
+            "groove music": "groove.exe",
+            
+            # ============================================
+            # Graphics & Design
+            # ============================================
+            "photoshop": "Photoshop.exe",
+            "adobe photoshop": "Photoshop.exe",
+            "illustrator": "illustrator.exe",
+            "adobe illustrator": "illustrator.exe",
+            "indesign": "indesign.exe",
+            "adobe indesign": "indesign.exe",
+            "premiere": "Premiere.exe",
+            "adobe premiere": "Premiere.exe",
+            "after effects": "AfterFX.exe",
+            "adobe after effects": "AfterFX.exe",
+            "lightroom": "lightroom.exe",
+            "adobe lightroom": "lightroom.exe",
+            "xd": "Adobe XD.exe",
+            "adobe xd": "Adobe XD.exe",
+            "figma": "Figma.exe",
+            "sketch": "sketch.exe",
+            "gimp": "gimp-2.10.exe",
+            "inkscape": "inkscape.exe",
+            "krita": "krita.exe",
+            "aseprite": "aseprite.exe",
+            "canva": "canva.exe",
+            "pixlr": "pixlr.exe",
+            "paint.net": "PaintDotNet.exe",
+            "clip studio paint": "clip-studio-paint.exe",
+            
+            # ============================================
+            # File Management & Archiving
+            # ============================================
+            "7-zip": "7zFM.exe",
+            "7zip": "7zFM.exe",
+            "winrar": "WinRAR.exe",
+            "rar": "WinRAR.exe",
+            "winzip": "winzip.exe",
+            "peazip": "peazip.exe",
+            "bandizip": "bandizip.exe",
+            "file roller": "file-roller.exe",
+            "total commander": "totalcmd.exe",
+            "totalcmd": "totalcmd.exe",
+            "double commander": "doublecmd.exe",
+            "everything": "everything.exe",
+            
+            # ============================================
+            # Database Tools
+            # ============================================
+            "mysql": "mysql.exe",
+            "mysql workbench": "MySQLWorkbench.exe",
+            "postgresql": "psql.exe",
+            "pgadmin": "pgadmin.exe",
+            "mongodb": "mongo.exe",
+            "dbeaver": "dbeaver.exe",
+            "sqlite": "sqlite3.exe",
+            "sqlitebrowser": "sqlitebrowser.exe",
+            "redis": "redis-cli.exe",
+            "nosqlclient": "nosqlclient.exe",
+            "mongodb compass": "MongoDBCompass.exe",
+            
+            # ============================================
+            # Version Control
+            # ============================================
+            "git": "git.exe",
+            "git gui": "git-gui.exe",
+            "github desktop": "GitHubDesktop.exe",
+            "tortoisegit": "TortoiseGit.exe",
+            "smartgit": "smartgit.exe",
+            "sourcetree": "SourceTree.exe",
+            "tortoise svn": "TortoiseSVN.exe",
+            "svn": "svn.exe",
+            "mercurial": "hg.exe",
+            "fossil": "fossil.exe",
+            
+            # ============================================
+            # Password & Security
+            # ============================================
+            "keepass": "KeePass.exe",
+            "keepassxc": "KeePassXC.exe",
+            "bitwarden": "Bitwarden.exe",
+            "1password": "1password.exe",
+            "lastpass": "lastpass.exe",
+            "dashlane": "dashlane.exe",
+            "enpass": "enpass.exe",
+            "pass": "pass.exe",
+            "truecrypt": "truecrypt.exe",
+            "veracrypt": "veracrypt.exe",
+            
+            # ============================================
+            # VPN & Network
+            # ============================================
+            "openvpn": "openvpn-gui.exe",
+            "wireguard": "wireguard.exe",
+            "nordvpn": "NordVPN.exe",
+            "expressvpn": "ExpressVPN.exe",
+            "protonvpn": "ProtonVPN.exe",
+            "mullvad": "mullvad.exe",
+            "windscribe": "Windscribe.exe",
+            "tunnelbear": "TunnelBear.exe",
+            "surfshark": "Surfshark.exe",
+            "tailscale": "tailscale.exe",
+            "zerotier": "zerotier-one.exe",
+            
+            # ============================================
+            # Virtualization & Containers
+            # ============================================
+            "virtualbox": "VirtualBox.exe",
+            "vmware player": "vmplayer.exe",
+            "vmware workstation": "vmware.exe",
+            "hyper-v": "virtmgmt.msc",
+            "parallels": "Parallels Desktop.exe",
+            "docker": "Docker.exe",
+            "docker desktop": "Docker.exe",
+            "vagrant": "vagrant.exe",
+            "multipass": "multipass.exe",
+            
+            # ============================================
+            # Remote Access
+            # ============================================
+            "remote desktop": "mstsc.exe",
+            "mstsc": "mstsc.exe",
+            "putty": "putty.exe",
+            "winscp": "WinSCP.exe",
+            "filezilla": "filezilla.exe",
+            "mobaxterm": "MobaXterm.exe",
+            "teamviewer": "TeamViewer.exe",
+            "anydesk": "AnyDesk.exe",
+            "nomachine": "NXPlayer.exe",
+            "chrome remote desktop": "chrome.exe",
+            "parsec": "parsec.exe",
+            "sunshine": "sunshine.exe",
+            
+            # ============================================
+            # Backup & Recovery
+            # ============================================
+            "acronis true image": "TrueImageHome.exe",
+            "backup and restore": "sdclt.exe",
+            "file history": "ms-settings:",
+            "duplicati": "Duplicati.exe",
+            "bacula": "bacula.exe",
+            "veeam": "Veeam.Backup.UI.exe",
+            "macrium reflect": "reflect.exe",
+            
+            # ============================================
+            # System Utilities
+            # ============================================
+            "ccleaner": "CCleaner.exe",
+            "glary utilities": "Glary Utilities.exe",
+            "advanced systemcare": "ASCService.exe",
+            "winrar": "WinRAR.exe",
+            "process explorer": "procexp.exe",
+            "process monitor": "procmon.exe",
+            "autoruns": "Autoruns.exe",
+            "sysinternals suite": "Sysinternals.exe",
+            "resource monitor": "resmon.exe",
+            "performance monitor": "perfmon.exe",
+            "disk management": "diskmgmt.msc",
+            "partition wizard": "PartitionWizard.exe",
+            "gparted": "gparted.exe",
+            "arandr": "arandr.exe",
+            
+            # ============================================
+            # Note Taking & Knowledge Management
+            # ============================================
+            "obsidian": "Obsidian.exe",
+            "evernote": "Evernote.exe",
+            "onenote": "onenote.exe",
+            "notion": "notion.exe",
+            "joplin": "Joplin.exe",
+            "logseq": "Logseq.exe",
+            "roam research": "roam-research.exe",
+            "standard notes": "StandardNotes.exe",
+            "simplenote": "Simplenote.exe",
+            "tiddlywiki": "tiddlywiki.exe",
+            "zim": "zim.exe",
+            "tomboy": "tomboy.exe",
+            
+            # ============================================
+            # Project Management
+            # ============================================
+            "trello": "trello.exe",
+            "asana": "asana.exe",
+            "monday": "monday.exe",
+            "clickup": "ClickUp.exe",
+            "jira": "jira.exe",
+            "taiga": "taiga.exe",
+            "wekan": "wekan.exe",
+            "plane": "plane.exe",
+            
+            # ============================================
+            # Cloud & Sync
+            # ============================================
+            "onedrive": "OneDrive.exe",
+            "microsoft onedrive": "OneDrive.exe",
+            "dropbox": "Dropbox.exe",
+            "google drive": "GoogleDrive.exe",
+            "box": "Box.exe",
+            "icloud": "iCloud.exe",
+            "mega": "MEGAsync.exe",
+            "sync.com": "SyncClient.exe",
+            "nextcloud": "nextcloud.exe",
+            "owncloud": "owncloud.exe",
+            "synology": "SynologyCloudStationBackup.exe",
+            
+            # ============================================
+            # Default/Fallback
+            # ============================================
+            "default": "",
+            "system": "",
         }
 
     # ============================================
@@ -53,8 +394,8 @@ class WindowsAdapter(BaseOSAdapter):
     # ============================================
 
     def list_dir(self, path: str) -> List[Dict[str, Any]]:
-        """Повертає список файлів та папок."""
-        # Перевірка дозволу
+        """Return list of files and folders."""
+        # Check permissions
         if not self.is_path_allowed(path, "read"):
             raise PermissionError(f"Access denied to path: {path}")
         
@@ -88,7 +429,7 @@ class WindowsAdapter(BaseOSAdapter):
         return sorted(result, key=lambda x: (x["type"] == "file", x["name"].lower()))
 
     def read_file(self, path: str, max_bytes: int = 10240) -> str:
-        """Читає вміст файлу."""
+        """Read file contents."""
         if not self.is_path_allowed(path, "read"):
             raise PermissionError(f"Access denied to path: {path}")
         
@@ -98,10 +439,10 @@ class WindowsAdapter(BaseOSAdapter):
         if not target.is_file():
             raise IsADirectoryError(f"Path is a directory: {path}")
         
-        # Перевірка розміру
+        # Check file size
         size = target.stat().st_size
         if size > max_bytes:
-            # Читаємо тільки початок файлу
+            # Read only the beginning of the file
             with open(target, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read(max_bytes)
             return content + f"\n\n... [Truncated. File size: {size} bytes, shown: {max_bytes} bytes]"
@@ -110,15 +451,15 @@ class WindowsAdapter(BaseOSAdapter):
             return f.read()
 
     def create_file(self, path: str, content: str = "") -> bool:
-        """Створює новий файл."""
+        """Create a new file."""
         if not self.is_path_allowed(path, "write"):
             raise PermissionError(f"Access denied to path: {path}")
         
         target = Path(path).expanduser().resolve()
         if target.exists():
             raise FileExistsError(f"File already exists: {path}")
-        
-        # Створюємо батьківські директорії якщо потрібно
+
+        # Create parent directories if needed
         target.parent.mkdir(parents=True, exist_ok=True)
         
         with open(target, "w", encoding="utf-8") as f:
@@ -127,7 +468,7 @@ class WindowsAdapter(BaseOSAdapter):
         return True
 
     def write_file(self, path: str, content: str, overwrite: bool = False) -> bool:
-        """Записує вміст у файл."""
+        """Write content to a file."""
         if not self.is_path_allowed(path, "write"):
             raise PermissionError(f"Access denied to path: {path}")
         
@@ -135,8 +476,8 @@ class WindowsAdapter(BaseOSAdapter):
         
         if target.exists() and not overwrite:
             raise FileExistsError(f"File exists and overwrite=False: {path}")
-        
-        # Створюємо батьківські директорії якщо потрібно
+
+        # Create parent directories if needed
         target.parent.mkdir(parents=True, exist_ok=True)
         
         with open(target, "w", encoding="utf-8") as f:
@@ -145,7 +486,7 @@ class WindowsAdapter(BaseOSAdapter):
         return True
 
     def delete_path(self, path: str, recursive: bool = False) -> bool:
-        """Видаляє файл або папку."""
+        """Delete a file or folder."""
         if not self.is_path_allowed(path, "delete"):
             raise PermissionError(f"Access denied to path: {path}")
         
@@ -160,7 +501,7 @@ class WindowsAdapter(BaseOSAdapter):
             if recursive:
                 shutil.rmtree(target)
             else:
-                # Видаляємо тільки порожню директорію
+                # Delete only empty directory
                 target.rmdir()
         
         return True
@@ -170,20 +511,20 @@ class WindowsAdapter(BaseOSAdapter):
     # ============================================
 
     def open_app(self, app_name: str, args: Optional[List[str]] = None) -> bool:
-        """Відкриває додаток."""
+        """Open an application."""
         if not self.is_app_allowed(app_name):
             raise PermissionError(f"Application not in allowed list: {app_name}")
         
         app_path = self._allowed_apps.get(app_name.lower(), "")
         
-        # Спеціальні випадки
+        # Special cases
         if app_name.lower() == "browser":
-            # Відкриваємо браузер за замовчуванням з порожньою сторінкою
+            # Open default browser with empty page
             import webbrowser
             webbrowser.open("about:blank")
             return True
-        
-        # Якщо шлях починається з "ms-" — це Windows Store app
+
+        # If path starts with "ms-" it's a Windows Store app
         if app_path.startswith("ms-"):
             subprocess.Popen(["start", app_path], shell=True)
             return True
@@ -193,7 +534,7 @@ class WindowsAdapter(BaseOSAdapter):
             cmd.extend(args)
         
         try:
-            # Використовуємо start для Windows
+            # Use start for Windows
             subprocess.Popen(
                 ["start", "", *cmd],
                 shell=True,
@@ -209,7 +550,7 @@ class WindowsAdapter(BaseOSAdapter):
     # ============================================
 
     def open_url(self, url: str) -> bool:
-        """Відкриває URL у браузері за замовчуванням."""
+        """Open URL in default browser."""
         try:
             webbrowser.open(url)
             return True
@@ -221,9 +562,7 @@ class WindowsAdapter(BaseOSAdapter):
     # ============================================
 
     def get_system_info(self) -> Dict[str, Any]:
-        """Повертає інформацію про систему."""
-        import platform
-        
+        """Return system information."""
         info = {
             "os": "Windows",
             "os_version": platform.version(),
@@ -233,15 +572,15 @@ class WindowsAdapter(BaseOSAdapter):
             "hostname": platform.node(),
             "python_version": platform.python_version(),
         }
-        
-        # Додаємо інформацію про пам'ять та диски
+
+        # Add memory and disk information
         info["memory"] = self.get_memory_info()
         info["disks"] = self.get_disk_info()
         
         return info
 
     def get_memory_info(self) -> Dict[str, int]:
-        """Повертає інформацію про пам'ять."""
+        """Return memory information."""
         try:
             import ctypes
             
@@ -276,7 +615,6 @@ class WindowsAdapter(BaseOSAdapter):
         disks = []
         
         try:
-            import ctypes
             import string
             
             for letter in string.ascii_uppercase:
