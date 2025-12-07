@@ -1,14 +1,14 @@
 """
 Amadeus Core Policy Engine
 
-Двигун політик безпеки — відповідає за авторизацію дій.
-Перевіряє ActionPlan проти Capabilities та правил ризику.
+Core policy engine — responsible for action authorization.
+Verifies ActionPlan against Capabilities and risk rules.
 
-Принципи Zero-Trust:
-1. Всі дії перевіряються перед виконанням
-2. Можливості (capabilities) явно декларуються
-3. Високоризикові дії потребують підтвердження
-4. Деструктивні дії потребують typed confirmation
+Zero-Trust Principles:
+1. All actions are verified before execution
+2. Capabilities are explicitly declared
+3. High-risk actions require confirmation
+4. Destructive actions require typed confirmation
 """
 
 from __future__ import annotations
@@ -28,24 +28,24 @@ from amadeus.core.entities import (
 
 
 class ConfirmationType(Enum):
-    """Типи підтвердження."""
-    NONE = auto()           # Не потрібне
-    SIMPLE = auto()         # Просте Yes/No
-    TYPED = auto()          # Введення підтверджувальної фрази
-    PASSCODE = auto()       # Введення пароля/PIN (майбутнє)
+    """Confirmation types."""
+    NONE = auto()           # No confirmation required
+    SIMPLE = auto()         # Simple Yes/No confirmation
+    TYPED = auto()          # Typed confirmation phrase required
+    PASSCODE = auto()       # Passcode/PIN entry required (future)
 
 
 @dataclass(frozen=True)
 class PolicyDecision:
     """
-    Результат оцінки політики.
-    
+    Policy evaluation result.
+
     Attributes:
-        allowed: Чи дозволено виконання
-        reason: Причина рішення
-        requires_confirmation: Чи потрібне підтвердження
-        confirmation_type: Тип підтвердження
-        denied_actions: Список заборонених дій (якщо є)
+        allowed: Whether the action is allowed
+        reason: Reason for the decision
+        requires_confirmation: Whether confirmation is required
+        confirmation_type: Type of confirmation required
+        denied_actions: List of denied actions (if any)
     """
     allowed: bool
     reason: str
@@ -56,7 +56,7 @@ class PolicyDecision:
 
     @staticmethod
     def allow(reason: str = "Action allowed") -> "PolicyDecision":
-        """Створює дозвіл без підтвердження."""
+        """Create an allow decision without confirmation."""
         return PolicyDecision(allowed=True, reason=reason)
 
     @staticmethod
@@ -64,7 +64,7 @@ class PolicyDecision:
         reason: str,
         confirmation_type: ConfirmationType = ConfirmationType.SIMPLE
     ) -> "PolicyDecision":
-        """Створює дозвіл з підтвердженням."""
+        """Create an allow decision with confirmation."""
         return PolicyDecision(
             allowed=True,
             reason=reason,
@@ -74,7 +74,7 @@ class PolicyDecision:
 
     @staticmethod
     def deny(reason: str, denied_actions: Optional[List[str]] = None) -> "PolicyDecision":
-        """Створює відмову."""
+        """Create a deny decision."""
         return PolicyDecision(
             allowed=False,
             reason=reason,
@@ -85,15 +85,15 @@ class PolicyDecision:
 @dataclass
 class PolicyRule:
     """
-    Правило політики безпеки.
-    
+    Security policy rule.
+
     Attributes:
-        rule_id: Ідентифікатор правила
-        description: Опис правила
-        scope: Область застосування (опціонально)
-        risk_threshold: Мінімальний рівень ризику для спрацювання
-        confirmation_type: Тип підтвердження при спрацюванні
-        enabled: Чи активне правило
+        rule_id: Rule identifier
+        description: Rule description
+        scope: Scope of application (optional)
+        risk_threshold: Minimum risk level for triggering
+        confirmation_type: Type of confirmation required
+        enabled: Whether the rule is enabled
     """
     rule_id: str
     description: str
@@ -103,30 +103,30 @@ class PolicyRule:
     enabled: bool = True
 
 
-# Стандартні правила безпеки
+# Default policy rules
 DEFAULT_POLICY_RULES: List[PolicyRule] = [
     PolicyRule(
         rule_id="destructive_confirmation",
-        description="Деструктивні операції потребують typed confirmation",
+        description="Destructive actions require typed confirmation",
         risk_threshold=RiskLevel.DESTRUCTIVE,
         confirmation_type=ConfirmationType.TYPED,
     ),
     PolicyRule(
         rule_id="high_risk_confirmation",
-        description="Високоризикові операції потребують простого підтвердження",
+        description="High-risk actions require simple confirmation",
         risk_threshold=RiskLevel.HIGH,
         confirmation_type=ConfirmationType.SIMPLE,
     ),
     PolicyRule(
         rule_id="fs_delete_always_confirm",
-        description="Видалення файлів завжди потребує typed confirmation",
+        description="File deletion always requires typed confirmation",
         scope=CapabilityScope.FS_DELETE,
-        risk_threshold=RiskLevel.SAFE,  # Завжди, незалежно від ризику
+        risk_threshold=RiskLevel.SAFE,  # Always, regardless of risk
         confirmation_type=ConfirmationType.TYPED,
     ),
     PolicyRule(
         rule_id="fs_write_confirm",
-        description="Запис у файли потребує підтвердження",
+        description="File writing requires confirmation",
         scope=CapabilityScope.FS_WRITE,
         risk_threshold=RiskLevel.SAFE,
         confirmation_type=ConfirmationType.SIMPLE,
@@ -136,32 +136,32 @@ DEFAULT_POLICY_RULES: List[PolicyRule] = [
 
 class PolicyEngine:
     """
-    Двигун політик безпеки.
-    
-    Виконує двоетапну перевірку:
-    1. Capability Check: чи має навичка право на операцію
-    2. Risk Assessment: який рівень підтвердження потрібен
-    
-    Приклад використання:
+    Security policy engine.
+
+    Performs a two-step verification:
+    1. Capability Check: whether the skill has permission for the operation
+    2. Risk Assessment: what level of confirmation is required
+
+    Example usage:
         engine = PolicyEngine()
         decision = engine.evaluate(plan, skill_capabilities)
         
         if decision.allowed:
             if decision.requires_confirmation:
-                # Показати діалог підтвердження
+                # Show confirmation dialog
                 pass
             else:
-                # Виконати автоматично
+                # Execute automatically
                 pass
         else:
-            # Відмовити з поясненням
+            # Deny with explanation
             print(decision.reason)
     """
 
     def __init__(self, rules: Optional[List[PolicyRule]] = None) -> None:
         self.rules = rules or DEFAULT_POLICY_RULES.copy()
         
-        # Mapping: function_name → required capability scope
+        # Mapping: function_name -> required capability scope
         self._function_to_scope: Dict[str, CapabilityScope] = {
             "list_dir": CapabilityScope.FS_READ,
             "read_file": CapabilityScope.FS_READ,
@@ -181,28 +181,28 @@ class PolicyEngine:
         context: Optional[Dict[str, Any]] = None,
     ) -> PolicyDecision:
         """
-        Оцінює план дій.
-        
+        Evaluates the action plan against security policies.
+
         Args:
-            plan: План для оцінки
-            capabilities: Доступні можливості (якщо None — системні defaults)
-            context: Додатковий контекст (user, session, etc.)
-            
+            plan: Action plan to evaluate
+            capabilities: Available capabilities (if None - system defaults)
+            context: Additional context (user, session, etc.)
+
         Returns:
-            Рішення політики
+            Policy decision
         """
         if plan.is_empty:
             return PolicyDecision.allow("Empty plan, nothing to execute")
-        
-        # Етап 1: Перевірка capabilities
+
+        # Stage 1: Capability Check
         capability_result = self._check_capabilities(plan, capabilities)
         if not capability_result.allowed:
             return capability_result
-        
-        # Етап 2: Оцінка ризиків
+
+        # Stage 2: Risk Assessment
         risk_result = self._assess_risk(plan)
-        
-        # Об'єднуємо результати
+
+        # Merge results
         return self._merge_decisions(capability_result, risk_result)
 
     def _check_capabilities(
@@ -210,9 +210,9 @@ class PolicyEngine:
         plan: ActionPlan,
         capabilities: Optional[List[Capability]],
     ) -> PolicyDecision:
-        """Перевіряє, чи всі дії дозволені capabilities."""
-        
-        # Якщо capabilities не вказані — дозволяємо (системний рівень)
+        """Checks if all actions are allowed by capabilities."""
+
+        # If capabilities are not specified - allow (system level)
         if capabilities is None:
             return PolicyDecision.allow("System-level access granted")
         
@@ -223,11 +223,11 @@ class PolicyEngine:
             required_scope = self._function_to_scope.get(action.function_name)
             
             if required_scope is None:
-                # Невідома функція — попередження
+                # Unknown function - warning
                 warnings.append(f"Unknown function: {action.function_name}")
                 continue
-            
-            # Шукаємо відповідну capability
+
+            # Look for matching capability
             matching_cap = None
             for cap in capabilities:
                 if cap.scope == required_scope:
@@ -239,8 +239,8 @@ class PolicyEngine:
                     f"Action '{action.function_name}' requires capability '{required_scope.value}'"
                 )
                 continue
-            
-            # Перевіряємо constraints (наприклад, allowed_paths)
+
+            # Check constraints (e.g., allowed_paths)
             if "path" in action.args and hasattr(matching_cap, "allows_path"):
                 path = action.args["path"]
                 if not matching_cap.allows_path(path):
@@ -264,13 +264,13 @@ class PolicyEngine:
         max_risk = plan.max_risk
         required_confirmation = ConfirmationType.NONE
         reasons: List[str] = []
-        
-        # Застосовуємо правила
+
+        # Apply rules
         for rule in self.rules:
             if not rule.enabled:
                 continue
-            
-            # Перевіряємо scope-specific правила
+
+            # Check scope-specific rules
             if rule.scope is not None:
                 for action in plan.actions:
                     action_scope = self._function_to_scope.get(action.function_name)
@@ -280,7 +280,7 @@ class PolicyEngine:
                                 required_confirmation = rule.confirmation_type
                                 reasons.append(rule.description)
             else:
-                # Загальні правила за рівнем ризику
+                # General risk-based rules
                 if max_risk.value >= rule.risk_threshold.value:
                     if rule.confirmation_type.value > required_confirmation.value:
                         required_confirmation = rule.confirmation_type
@@ -299,30 +299,30 @@ class PolicyEngine:
         cap_decision: PolicyDecision,
         risk_decision: PolicyDecision,
     ) -> PolicyDecision:
-        """Об'єднує рішення capability та risk assessment."""
-        
-        # Якщо capability denied — відмовляємо
+        """Merges capability and risk assessment decisions."""
+
+        # If capability denied - deny
         if not cap_decision.allowed:
             return cap_decision
-        
-        # Якщо risk denied — відмовляємо
+
+        # If risk denied - deny
         if not risk_decision.allowed:
             return risk_decision
-        
-        # Об'єднуємо вимоги до підтвердження
+
+        # Merge confirmation requirements
         requires_confirmation = (
             cap_decision.requires_confirmation or 
             risk_decision.requires_confirmation
         )
-        
-        # Беремо вищий тип підтвердження
+
+        # Take the highest confirmation type
         confirmation_type = max(
             cap_decision.confirmation_type,
             risk_decision.confirmation_type,
             key=lambda x: x.value,
         )
-        
-        # Об'єднуємо причини
+
+        # Merge reasons
         reasons = []
         if cap_decision.reason and cap_decision.reason != "System-level access granted":
             reasons.append(cap_decision.reason)
@@ -341,14 +341,14 @@ class PolicyEngine:
 
     def get_confirmation_phrase(self, plan: ActionPlan) -> str:
         """
-        Генерує фразу для typed confirmation.
-        
-        Для деструктивних операцій користувач повинен ввести цю фразу.
+        Generate a confirmation phrase.
+
+        For destructive operations, the user must enter this phrase.
         """
         if plan.max_risk != RiskLevel.DESTRUCTIVE:
             return ""
-        
-        # Знаходимо першу деструктивну дію
+
+        # Find the first destructive action
         for action in plan.actions:
             if action.risk == RiskLevel.DESTRUCTIVE:
                 if action.function_name == "delete_path":
@@ -358,11 +358,11 @@ class PolicyEngine:
         return "CONFIRM DELETE"
 
     def add_rule(self, rule: PolicyRule) -> None:
-        """Додає нове правило."""
+        """Adds a new rule."""
         self.rules.append(rule)
 
     def remove_rule(self, rule_id: str) -> bool:
-        """Видаляє правило за ID."""
+        """Removes a rule by ID."""
         for i, rule in enumerate(self.rules):
             if rule.rule_id == rule_id:
                 self.rules.pop(i)
@@ -370,7 +370,7 @@ class PolicyEngine:
         return False
 
     def enable_rule(self, rule_id: str) -> bool:
-        """Активує правило."""
+        """Activates a rule."""
         for rule in self.rules:
             if rule.rule_id == rule_id:
                 rule.enabled = True
@@ -378,7 +378,7 @@ class PolicyEngine:
         return False
 
     def disable_rule(self, rule_id: str) -> bool:
-        """Деактивує правило."""
+        """Deactivates a rule."""
         for rule in self.rules:
             if rule.rule_id == rule_id:
                 rule.enabled = False
@@ -392,10 +392,10 @@ class PolicyEngine:
 
 class PreExecutionValidator:
     """
-    Валідатор перед виконанням.
-    
-    Виконує фінальну перевірку безпосередньо перед виконанням кожної дії.
-    Це друга лінія захисту після PolicyEngine.
+    Validator before execution.
+
+    Performs a final check right before executing each action.
+    This is the second line of defense after PolicyEngine.
     """
 
     def __init__(self) -> None:
@@ -425,19 +425,19 @@ class PreExecutionValidator:
 
     def validate_action(self, action: Action) -> PolicyDecision:
         """
-        Валідує окрему дію перед виконанням.
-        
+        Validates an action before execution.
+
         Returns:
             PolicyDecision з результатом валідації
         """
-        # Перевірка заблокованих шляхів
+        # Check blocked paths
         path = action.args.get("path", "")
         if path and self._is_blocked_path(path):
             return PolicyDecision.deny(
                 f"Path '{path}' is in the blocked list for safety"
             )
-        
-        # Перевірка заблокованих команд
+
+        # Check blocked commands
         for blocked in self._blocked_commands:
             for value in action.args.values():
                 if isinstance(value, str) and blocked in value.lower():
@@ -448,7 +448,7 @@ class PreExecutionValidator:
         return PolicyDecision.allow("Pre-execution validation passed")
 
     def _is_blocked_path(self, path: str) -> bool:
-        """Перевіряє, чи шлях заблокований."""
+        """Checks if a path is blocked."""
         from pathlib import Path
         
         try:
@@ -457,17 +457,17 @@ class PreExecutionValidator:
                 if normalized.lower().startswith(blocked.lower()):
                     return True
         except Exception:
-            # При помилці нормалізації — блокуємо
+            # If normalization fails, block the path
             return True
         
         return False
 
     def add_blocked_path(self, path: str) -> None:
-        """Додає шлях до списку заблокованих."""
+        """Adds a path to the blocked list."""
         self._blocked_paths.add(path)
 
     def remove_blocked_path(self, path: str) -> bool:
-        """Видаляє шлях зі списку заблокованих."""
+        """Removes a path from the blocked list."""
         try:
             self._blocked_paths.remove(path)
             return True

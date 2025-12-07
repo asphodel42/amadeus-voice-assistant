@@ -1,13 +1,13 @@
 """
 Amadeus Core Planner
 
-Планувальник дій — центральний компонент доменної логіки.
-Відповідає за перетворення Intent → ActionPlan.
+Action Planner — central component of the domain logic.
+Responsible for transforming Intent -> ActionPlan.
 
-Принципи:
-- Детермінована поведінка: один Intent → один ActionPlan
-- Безпечні defaults: високий ризик = потребує підтвердження
-- Читабельні плани: людина повинна розуміти, що буде виконано
+Principles:
+- Deterministic behavior: one Intent -> one ActionPlan
+- Safe defaults: high risk = requires confirmation
+- Readable plans: humans must understand what will be executed
 """
 
 from __future__ import annotations
@@ -26,58 +26,377 @@ from amadeus.core.entities import (
 
 @dataclass
 class PlannerConfig:
-    """Конфігурація планувальника."""
-    
-    # Дозволені директорії для операцій з файлами
+    """Configuration for the planner."""
+
+    # Allowed directories for file operations
     allowed_directories: List[str] = field(default_factory=lambda: [
         "~/Documents",
         "~/Downloads",
         "~/Desktop",
     ])
-    
-    # Білий список додатків
+
+    # White list of applications
     allowed_apps: List[str] = field(default_factory=lambda: [
-        "notepad", "calculator", "browser", "explorer",
-        "terminal", "cmd", "powershell",
-        # Linux
-        "nautilus", "gedit", "gnome-terminal",
+        # ============================================
+        # Windows Built-in
+        # ============================================
+        "notepad", "notepad++",
+        "calculator", "calc",
+        "wordpad",
+        "cmd", "powershell", "terminal", "windows terminal",
+        "explorer", "file explorer",
+        "paint", "mspaint",
+        "settings", "control panel",
+        "task manager", "taskmgr",
+        "disk management",
+        
+        # ============================================
+        # Web Browsers (Windows/Linux/macOS)
+        # ============================================
+        "browser", "firefox", "mozilla firefox",
+        "chrome", "google chrome", "chromium",
+        "edge", "microsoft edge",
+        "safari",
+        "opera",
+        "brave",
+        "vivaldi",
+        "tor", "torbrowser",
+        
+        # ============================================
+        # Development & Code Editors
+        # ============================================
+        "code", "vscode", "visual studio code",
+        "sublime", "sublime text", "sublime_text",
+        "atom",
+        "notepad++",
+        "vim",
+        "nano",
+        "emacs",
+        "pycharm",
+        "webstorm",
+        "intellij", "idea",
+        "studio", "android studio",
+        
+        # ============================================
+        # Office & Productivity
+        # ============================================
+        "word", "winword",
+        "excel",
+        "powerpoint", "pptview",
+        "outlook",
+        "oneword",
+        "access",
+        "libreoffice", "libreoffice writer", "swriter",
+        "calc", "libreoffice calc", "scalc",
+        "impress", "libreoffice impress", "simpress",
+        "base", "libreoffice base",
+        "draw", "libreoffice draw", "sdraw",
+        
+        # ============================================
+        # Communication & Social
+        # ============================================
+        "discord",
+        "telegram",
+        "slack",
+        "teams", "microsoft teams",
+        "zoom",
+        "whatsapp",
+        "viber",
+        "messenger",
+        "signal",
+        "wire",
+        "google meet",
+        "hangouts",
+        
+        # ============================================
+        # Media & Entertainment
+        # ============================================
+        "vlc", "vlcmediaplayer",
+        "mpv",
+        "kodi",
+        "plex", "plexmediaplayer",
+        "spotify",
+        "apple music", "itunes",
+        "audacity",
+        "youtube", "youtube music",
+        "netflix",
+        "hulu",
+        "prime video",
+        "steam",
+        "epic", "epicgames",
+        "origin",
+        "uplay", "ubisoft",
+        "gog",
+        "twitch",
+        "ott", "obs", "obs studio",
+        
+        # ============================================
+        # Graphics & Design
+        # ============================================
+        "photoshop", "adobe photoshop",
+        "illustrator", "adobe illustrator",
+        "indesign", "adobe indesign",
+        "premiere", "adobe premiere",
+        "aftereffects", "adobe after effects",
+        "lightroom", "adobe lightroom",
+        "gimp",
+        "inkscape",
+        "blender",
+        "krita",
+        "aseprite",
+        "figma",
+        "xd", "adobe xd",
+        "sketch",
+        "canva",
+        "pixlr",
+        "paint.net",
+        
+        # ============================================
+        # File Management & Archiving
+        # ============================================
+        "explorer", "file explorer",
+        "nautilus", "files", "gnome files",
+        "dolphin", "kde dolphin",
+        "thunar", "xfce thunar",
+        "7zip", "7z",
+        "winrar", "unrar",
+        "winzip",
+        "peazip",
+        
+        # ============================================
+        # Version Control
+        # ============================================
+        "git", "git bash",
+        "github", "github desktop",
+        "gitlab",
+        "bitbucket",
+        "tortoisegit",
+        "sourcetree",
+        
+        # ============================================
+        # Database Tools
+        # ============================================
+        "mysql", "mysql workbench",
+        "postgresql", "pgadmin",
+        "mongodb", "mongoclient",
+        "dbeaver",
+        "sqlite", "sqlitebrowser",
+        "redis",
+        "phpmyadmin",
+        
+        # ============================================
+        # Terminal & Shell (Linux/macOS/Windows)
+        # ============================================
+        "terminal", "gnome terminal",
+        "konsole", "kde konsole",
+        "xterm",
+        "urxvt", "rxvt",
+        "tilix",
+        "alacritty",
+        "kitty",
+        "bash",
+        "zsh",
+        "fish",
+        "powershell", "pwsh",
+        "cmd", "command prompt",
+        "windows terminal",
+        
+        # ============================================
+        # System & Monitoring
+        # ============================================
+        "htop",
+        "top",
+        "iotop",
+        "nethogs",
+        "gmonitor", "gnome monitor",
+        "gnome system monitor",
+        "task manager",
+        "resource monitor",
+        
+        # ============================================
+        # Document & Viewers
+        # ============================================
+        "acrobat", "adobe reader",
+        "sumatrapdf",
+        "foxit reader",
+        "evince", "document viewer",
+        "okular",
+        "zathura",
+        "nomacs",
+        
+        # ============================================
+        # Knowledge Management & Note Taking
+        # ============================================
+        "obsidian",
+        "evernote",
+        "notion",
+        "onenote", "microsoft onenote",
+        "roam research",
+        "logseq",
+        "joplin",
+        "standard notes",
+        "simplenote",
+        "tiddlywiki",
+        
+        # ============================================
+        # Project Management & Productivity
+        # ============================================
+        "trello",
+        "asana",
+        "monday.com",
+        "clickup",
+        "jira",
+        "confluence",
+        "todoist",
+        "microsoft todo",
+        "notion",
+        "basecamp",
+        
+        # ============================================
+        # Cloud & Sync
+        # ============================================
+        "onedrive", "microsoft onedrive",
+        "dropbox",
+        "google drive", "drive",
+        "box",
+        "icloud",
+        "mega",
+        "sync.com",
+        "nextcloud",
+        "owncloud",
+        "synology",
+        
+        # ============================================
+        # Password & Security
+        # ============================================
+        "keepass",
+        "keepassxc",
+        "bitwarden",
+        "1password",
+        "lastpass",
+        "dashlane",
+        "enpass",
+        "pass",
+        
+        # ============================================
+        # VPN & Network
+        # ============================================
+        "openvpn",
+        "wireguard",
+        "nordvpn",
+        "expressvpn",
+        "protonvpn",
+        "windscribe",
+        "tunnelbear",
+        "surfshark",
+        "mullvad",
+        
+        # ============================================
+        # Virtualization
+        # ============================================
+        "virtualbox",
+        "vmware", "vmplayer",
+        "hyper-v",
+        "parallels",
+        "docker", "docker desktop",
+        "vagrant",
+        
+        # ============================================
+        # System Utilities
+        # ============================================
+        "ccleaner",
+        "glary utilities",
+        "winaero tweaker",
+        "autoruns",
+        "procexp", "process explorer",
+        "dependency walker",
+        "procmon", "process monitor",
+        "sysinternals suite",
+        
+        # ============================================
+        # FTP & Remote Access
+        # ============================================
+        "filezilla",
+        "putty",
+        "winscp",
+        "mobaxterm",
+        "remote desktop", "mstsc",
+        "teamviewer",
+        "anydesk",
+        "chrome remote desktop",
+        "nomachine",
+        "remmina",
+        
+        # ============================================
+        # Media Converters
+        # ============================================
+        "handbrake",
+        "ffmpeg",
+        "imagemagick",
+        "conversion studio",
+        "winff",
+        
+        # ============================================
+        # Torrent
+        # ============================================
+        "qbittorrent",
+        "transmission",
+        "deluge",
+        "syncthing",
+        
+        # ============================================
+        # AI & Machine Learning
+        # ============================================
+        "python",
+        "jupyter",
+        "anaconda",
+        "miniconda",
+        "tensorflow",
+        "pytorch",
+        "chatgpt",
+        
+        # ============================================
+        # Default/Fallback
+        # ============================================
+        "default app",
+        "system default",
     ])
-    
-    # Пошукові системи
+
+    # Search engines
     search_engines: Dict[str, str] = field(default_factory=lambda: {
         "default": "https://duckduckgo.com/?q={}",
         "duckduckgo": "https://duckduckgo.com/?q={}",
         "google": "https://www.google.com/search?q={}",
     })
-    
-    # Максимальний розмір файлу для читання (bytes)
+
+    # Max read size (bytes)
     max_read_size: int = 10240  # 10 KB
-    
-    # Максимальний розмір файлу для запису (bytes)
+
+    # Max write size (bytes)
     max_write_size: int = 1048576  # 1 MB
     
-    # Автоматичне підтвердження для SAFE операцій
+    # Automatic confirmation for SAFE operations
     auto_confirm_safe: bool = True
-    
-    # Сухий запуск за замовчуванням для деструктивних операцій
+
+    # Dry run by default for destructive operations
     dry_run_destructive: bool = True
 
 
 class Planner:
     """
-    Планувальник дій.
-    
-    Перетворює Intent у ActionPlan, додаючи:
-    - Конкретні дії для виконання
-    - Рівні ризику
-    - Вимоги до підтвердження
-    - Людино-читабельні описи
+    Action Planner.
+
+    Transforms Intent into ActionPlan by adding:
+    - Specific actions to be performed
+    - Risk levels
+    - Confirmation requirements
+    - Human-readable descriptions
     """
 
     def __init__(self, config: Optional[PlannerConfig] = None) -> None:
         self.config = config or PlannerConfig()
         
-        # Реєстр обробників намірів
+        # Map IntentType to handler methods
         self._intent_handlers: Dict[IntentType, callable] = {
             IntentType.OPEN_APP: self._plan_open_app,
             IntentType.OPEN_URL: self._plan_open_url,
@@ -93,24 +412,24 @@ class Planner:
 
     def create_plan(self, intent: Intent) -> ActionPlan:
         """
-        Створює план дій для наміру.
-        
+        Creates an action plan for the given intent.
+
         Args:
-            intent: Розпізнаний намір
-            
+            intent: Recognized intent
+
         Returns:
-            План дій для виконання
+            Action plan for execution
         """
         handler = self._intent_handlers.get(intent.intent_type, self._plan_unknown)
         actions = handler(intent)
-        
-        # Визначаємо, чи потрібне підтвердження
+
+        # Determine if confirmation is needed
         requires_confirmation = any(
             action.risk in (RiskLevel.HIGH, RiskLevel.DESTRUCTIVE)
             for action in actions
         )
-        
-        # Для SAFE операцій можна автоматично підтверджувати
+
+        # For SAFE operations, confirmation can be automatically granted
         if not requires_confirmation and self.config.auto_confirm_safe:
             requires_confirmation = False
         
@@ -125,10 +444,10 @@ class Planner:
     # ============================================
 
     def _plan_open_app(self, intent: Intent) -> List[Action]:
-        """Планує відкриття додатку."""
+        """Plans to open an application."""
         app_name = intent.get_slot("app_name", "").lower()
         
-        # Перевірка білого списку
+        # Check white list
         is_allowed = app_name in self.config.allowed_apps
         
         if not is_allowed:
@@ -149,10 +468,10 @@ class Planner:
         ]
 
     def _plan_open_url(self, intent: Intent) -> List[Action]:
-        """Планує відкриття URL."""
+        """Plans to open a URL."""
         url = intent.get_slot("url", "")
         
-        # Перевірка безпеки URL
+        # Check URL safety
         is_https = url.startswith("https://")
         risk = RiskLevel.SAFE if is_https else RiskLevel.MEDIUM
         
@@ -168,11 +487,11 @@ class Planner:
         ]
 
     def _plan_web_search(self, intent: Intent) -> List[Action]:
-        """Планує веб-пошук."""
+        """Plans a web search."""
         query = intent.get_slot("query", "")
         engine = intent.get_slot("engine", "default")
-        
-        # Отримуємо URL шаблон для пошукової системи
+
+        # Get URL template for search engine
         url_template = self.config.search_engines.get(
             engine, 
             self.config.search_engines["default"]
@@ -190,7 +509,7 @@ class Planner:
         ]
 
     def _plan_list_dir(self, intent: Intent) -> List[Action]:
-        """Планує перегляд директорії."""
+        """Plans to list a directory."""
         path = intent.get_slot("path", ".")
         
         return [
@@ -205,7 +524,7 @@ class Planner:
         ]
 
     def _plan_read_file(self, intent: Intent) -> List[Action]:
-        """Планує читання файлу."""
+        """Plans to read a file."""
         path = intent.get_slot("path", "")
         
         return [
@@ -223,7 +542,7 @@ class Planner:
         ]
 
     def _plan_create_file(self, intent: Intent) -> List[Action]:
-        """Планує створення файлу."""
+        """Plans to create a file."""
         path = intent.get_slot("path", "")
         content = intent.get_slot("content", "")
         
@@ -242,7 +561,7 @@ class Planner:
         ]
 
     def _plan_write_file(self, intent: Intent) -> List[Action]:
-        """Планує запис у файл."""
+        """Plans to write to a file."""
         path = intent.get_slot("path", "")
         content = intent.get_slot("content", "")
         overwrite = intent.get_slot("overwrite", False)
@@ -267,7 +586,7 @@ class Planner:
         ]
 
     def _plan_delete_file(self, intent: Intent) -> List[Action]:
-        """Планує видалення файлу."""
+        """Plans to delete a file."""
         path = intent.get_slot("path", "")
         recursive = intent.get_slot("recursive", False)
         
@@ -286,7 +605,7 @@ class Planner:
         ]
 
     def _plan_system_info(self, intent: Intent) -> List[Action]:
-        """Планує отримання інформації про систему."""
+        """Plans to get system information."""
         return [
             Action(
                 tool_name="system",
@@ -299,11 +618,11 @@ class Planner:
         ]
 
     def _plan_unknown(self, intent: Intent) -> List[Action]:
-        """Обробка невідомого наміру."""
+        """Handles unknown intent."""
         return []
 
     def _create_denied_action(self, reason: str) -> Action:
-        """Створює дію-заглушку для забороненої операції."""
+        """Creates a no-op action for denied operation."""
         return Action(
             tool_name="system",
             function_name="denied",
@@ -320,14 +639,14 @@ class Planner:
 
 class PlanRenderer:
     """
-    Рендерер планів у людино-читабельний формат.
-    
-    Використовується для UI та логування.
+    Plan renderer for human-readable format.
+
+    Used for UI and logging.
     """
 
     @staticmethod
     def to_text(plan: ActionPlan) -> str:
-        """Рендерить план у текстовий формат."""
+        """Render the plan in text format."""
         if plan.is_empty:
             return "❓ No actions planned for this command."
         
@@ -369,7 +688,7 @@ class PlanRenderer:
 
     @staticmethod
     def to_dict(plan: ActionPlan) -> Dict[str, Any]:
-        """Рендерить план у словник (для JSON/API)."""
+        """Render the plan as a dictionary (for JSON/API)."""
         return {
             "plan_id": plan.plan_id,
             "intent": {

@@ -1,11 +1,11 @@
 """
 Amadeus Core Domain Entities
 
-Цей модуль містить всі доменні сутності (Data Classes).
-Сутності є незмінними (immutable) та не містять бізнес-логіки.
+This module contains all domain entities (Data Classes).
+Entities are immutable and do not contain business logic.
 
-Ієрархія:
-    CommandRequest → Intent → ActionPlan → Action → ExecutionResult → AuditEvent
+Hierarchy:
+    CommandRequest -> Intent -> ActionPlan -> Action -> ExecutionResult -> AuditEvent
 """
 
 from __future__ import annotations
@@ -22,15 +22,15 @@ from typing import Any, Dict, List, Optional
 @total_ordering
 class RiskLevel(Enum):
     """
-    Рівень ризику дії.
+    Risk level of actions.
     
-    Визначає, чи потрібне підтвердження користувача та який тип.
+    Determines whether user confirmation is needed and what type.
     """
-    SAFE = auto()        # Безпечні дії (list_dir, system_info)
-    MEDIUM = auto()      # Потребують уваги (open_url для non-HTTPS)
-    HIGH = auto()        # Потребують підтвердження (write_file, create_file)
-    DESTRUCTIVE = auto() # Потребують typed confirmation (delete_file)
-    
+    SAFE = auto()        # Safe actions (list_dir, system_info)
+    MEDIUM = auto()      # Requires attention (open_url for non-HTTPS)
+    HIGH = auto()        # Requires confirmation (write_file, create_file)
+    DESTRUCTIVE = auto() # Requires typed confirmation (delete_file)
+
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, RiskLevel):
             return NotImplemented
@@ -46,7 +46,7 @@ class RiskLevel(Enum):
 
 
 class IntentType(Enum):
-    """Типи підтримуваних намірів (MVP)."""
+    """Supported intent types for version 0.1.0 (MVP)."""
     OPEN_APP = "open_app"
     OPEN_URL = "open_url"
     WEB_SEARCH = "web_search"
@@ -60,7 +60,7 @@ class IntentType(Enum):
 
 
 class ExecutionStatus(Enum):
-    """Статус виконання дії."""
+    """Execution status of an action."""
     PENDING = "pending"
     CONFIRMED = "confirmed"
     DENIED = "denied"
@@ -74,13 +74,13 @@ class ExecutionStatus(Enum):
 @dataclass(frozen=True)
 class CommandRequest:
     """
-    Початковий запит користувача.
-    
+    User's initial request.
+
     Attributes:
-        request_id: Унікальний ідентифікатор запиту
-        raw_text: Оригінальний текст після ASR
-        timestamp: Час створення запиту
-        source: Джерело команди (voice, push_to_talk, text_input)
+        request_id: Unique request identifier
+        raw_text: Original text after ASR
+        timestamp: Request creation time
+        source: Command source (voice, push_to_talk, text_input)
     """
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     raw_text: str = ""
@@ -88,7 +88,7 @@ class CommandRequest:
     source: str = "voice"
 
     def __post_init__(self) -> None:
-        # Валідація: raw_text не може бути порожнім для обробки
+        # Validation: raw_text cannot be empty for processing
         if not self.raw_text.strip():
             object.__setattr__(self, 'raw_text', '')
 
@@ -96,13 +96,13 @@ class CommandRequest:
 @dataclass(frozen=True)
 class Intent:
     """
-    Розпізнаний намір користувача.
-    
+    Recognized user intent.
+
     Attributes:
-        intent_type: Тип наміру
-        slots: Витягнуті параметри (ключ-значення)
-        confidence: Впевненість у розпізнаванні (0.0-1.0)
-        original_request: Посилання на оригінальний запит
+        intent_type: Type of intent
+        slots: Extracted parameters (key-value)
+        confidence: Confidence in recognition (0.0-1.0)
+        original_request: Reference to the original request
     """
     intent_type: IntentType
     slots: Dict[str, Any] = field(default_factory=dict)
@@ -110,7 +110,7 @@ class Intent:
     original_request: Optional[CommandRequest] = None
 
     def __post_init__(self) -> None:
-        # Валідація confidence
+        # Validate confidence
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError(f"Confidence must be between 0.0 and 1.0, got {self.confidence}")
 
@@ -119,23 +119,23 @@ class Intent:
         return self.intent_type == IntentType.UNKNOWN
     
     def get_slot(self, key: str, default: Any = None) -> Any:
-        """Безпечне отримання слота."""
+        """Safely retrieve a slot."""
         return self.slots.get(key, default)
 
 
 @dataclass(frozen=True)
 class Action:
     """
-    Одна атомарна дія для виконання.
-    
+    One atomic action to be performed.
+
     Attributes:
-        action_id: Унікальний ідентифікатор дії
-        tool_name: Ім'я інструменту (filesystem, browser, process)
-        function_name: Ім'я функції для виклику
-        args: Аргументи функції
-        risk: Рівень ризику
-        description: Людино-читабельний опис для UI
-        requires_confirmation: Чи потребує явного підтвердження
+        action_id: Unique action identifier
+        tool_name: Tool name (filesystem, browser, process)
+        function_name: Function name to call
+        args: Function arguments
+        risk: Risk level
+        description: Human-readable description for UI
+        requires_confirmation: Whether explicit confirmation is required
     """
     action_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tool_name: str = ""
@@ -146,12 +146,12 @@ class Action:
     requires_confirmation: bool = False
 
     def __post_init__(self) -> None:
-        # Автоматично вимагати підтвердження для HIGH та DESTRUCTIVE
+        # Automatically require confirmation for HIGH and DESTRUCTIVE
         if self.risk in (RiskLevel.HIGH, RiskLevel.DESTRUCTIVE) and not self.requires_confirmation:
             object.__setattr__(self, 'requires_confirmation', True)
     
     def to_human_readable(self) -> str:
-        """Генерує людино-читабельний опис дії."""
+        """Generates a human-readable description of the action."""
         if self.description:
             return self.description
         return f"{self.tool_name}.{self.function_name}({self.args})"
@@ -160,16 +160,16 @@ class Action:
 @dataclass(frozen=True)
 class ActionPlan:
     """
-    План виконання, що складається з послідовності дій.
-    
+    Represents a plan consisting of a sequence of actions.
+
     Attributes:
-        plan_id: Унікальний ідентифікатор плану
-        intent: Оригінальний намір
-        actions: Список дій для виконання (в порядку)
-        requires_confirmation: Чи потребує план підтвердження
-        max_risk: Максимальний рівень ризику серед дій
-        dry_run: Чи це симуляція без реального виконання
-        created_at: Час створення плану
+        plan_id: Unique plan identifier
+        intent: Original intent
+        actions: List of actions to be performed (in order)
+        requires_confirmation: Whether the plan requires confirmation
+        max_risk: Maximum risk level among actions
+        dry_run: Whether this is a simulation without actual execution
+        created_at: Plan creation time
     """
     plan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     intent: Intent = field(default_factory=lambda: Intent(IntentType.UNKNOWN))
@@ -180,7 +180,7 @@ class ActionPlan:
 
     @property
     def max_risk(self) -> RiskLevel:
-        """Обчислює максимальний рівень ризику серед всіх дій."""
+        """Calculates the maximum risk level among all actions."""
         if not self.actions:
             return RiskLevel.SAFE
         return max(action.risk for action in self.actions)
@@ -190,7 +190,7 @@ class ActionPlan:
         return len(self.actions) == 0
 
     def to_preview_text(self) -> str:
-        """Генерує текст попереднього перегляду для UI."""
+        """Generates preview text for the UI."""
         if self.is_empty:
             return "No actions planned."
         
@@ -199,7 +199,7 @@ class ActionPlan:
         lines.append("")
         lines.append("Actions:")
         for i, action in enumerate(self.actions, 1):
-            marker = "⚠️" if action.requires_confirmation else "✓"
+            marker = "⚠️" if action.requires_confirmation else "✅"
             lines.append(f"  {i}. {marker} {action.to_human_readable()}")
         
         if self.requires_confirmation:
@@ -212,15 +212,15 @@ class ActionPlan:
 @dataclass(frozen=True)
 class ExecutionResult:
     """
-    Результат виконання дії.
-    
+    Represents the result of executing an action.
+
     Attributes:
-        action: Виконана дія
-        status: Статус виконання
-        output: Вихідні дані (якщо є)
-        error: Повідомлення про помилку (якщо є)
-        started_at: Час початку виконання
-        completed_at: Час завершення виконання
+        action: The executed action
+        status: Execution status
+        output: Output data (if any)
+        error: Error message (if any)
+        started_at: Start time of execution
+        completed_at: Completion time of execution
     """
     action: Action
     status: ExecutionStatus
@@ -244,18 +244,18 @@ class ExecutionResult:
 @dataclass(frozen=True)
 class AuditEvent:
     """
-    Подія для журналу аудиту (append-only).
-    
+    Represents an audit event (append-only).
+
     Attributes:
-        event_id: Унікальний ідентифікатор події
-        timestamp: Час події
-        event_type: Тип події (command, plan, confirmation, execution, error)
-        actor: Хто ініціював (user, system, plugin:<name>)
-        command_request: Оригінальний запит (якщо застосовно)
-        plan: План дій (якщо застосовно)
-        result: Результат виконання (якщо застосовно)
-        metadata: Додаткові дані
-        previous_hash: Хеш попередньої події (для hash chain)
+        event_id: Unique event identifier
+        timestamp: Event time
+        event_type: Event type (command, plan, confirmation, execution, error)
+        actor: Who initiated (user, system, plugin:<name>)
+        command_request: Original request (if applicable)
+        plan: Action plan (if applicable)
+        result: Execution result (if applicable)
+        metadata: Additional data
+        previous_hash: Hash of the previous event (for hash chain)
     """
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -268,7 +268,7 @@ class AuditEvent:
     previous_hash: str = ""
 
     def compute_hash(self) -> str:
-        """Обчислює SHA-256 хеш події для chain integrity."""
+        """Calculates SHA-256 hash of the event for chain integrity."""
         content = f"{self.event_id}|{self.timestamp.isoformat()}|{self.event_type}|{self.actor}|{self.previous_hash}"
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
@@ -278,7 +278,7 @@ class AuditEvent:
 # ============================================
 
 class CapabilityScope(Enum):
-    """Область застосування можливості (capability scope)."""
+    """Represents the scope of a capability (capability scope)."""
     # Filesystem
     FS_READ = "fs.read"
     FS_WRITE = "fs.write"
@@ -289,7 +289,7 @@ class CapabilityScope(Enum):
     PROCESS_LAUNCH = "process.launch"
     PROCESS_KILL = "process.kill"
     
-    # Network (browser-only for MVP)
+    # Network (browser-only for now)
     NET_BROWSER = "net.browser"
     
     # System
@@ -303,12 +303,12 @@ class CapabilityScope(Enum):
 @dataclass(frozen=True)
 class Capability:
     """
-    Можливість, що надається навичці (skill).
-    
+    Represents a capability provided by a skill (skill).
+
     Attributes:
-        scope: Область застосування
-        constraints: Обмеження (allowed_paths, max_size, etc.)
-        risk: Рівень ризику цієї можливості
+        scope: The scope of the capability
+        constraints: Constraints (allowed_paths, max_size, etc.)
+        risk: The risk level of this capability
     """
     scope: CapabilityScope
     constraints: Dict[str, Any] = field(default_factory=dict)
@@ -318,9 +318,9 @@ class Capability:
         """Перевіряє, чи дозволений шлях для filesystem операцій."""
         allowed_paths = self.constraints.get("allowed_paths", [])
         if not allowed_paths:
-            return True  # Немає обмежень
-        
-        # Нормалізація та перевірка
+            return True  # No restrictions
+
+        # Normalization and checking
         from pathlib import Path
         target = Path(path).resolve()
         for allowed in allowed_paths:
@@ -336,14 +336,14 @@ class Capability:
 @dataclass(frozen=True)
 class CapabilityManifest:
     """
-    Маніфест можливостей навички (plugin manifest).
-    
+    Represents a capability manifest for a skill (plugin manifest).
+
     Attributes:
-        skill_id: Унікальний ідентифікатор навички
-        version: Версія навички
-        publisher_id: Ідентифікатор видавця
-        capabilities: Список запитуваних можливостей
-        signature: Цифровий підпис маніфесту
+        skill_id: Unique skill identifier
+        version: Skill version
+        publisher_id: Publisher identifier
+        capabilities: List of requested capabilities
+        signature: Digital signature of the manifest
     """
     skill_id: str
     version: str

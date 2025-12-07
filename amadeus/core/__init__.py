@@ -1,8 +1,8 @@
 """
 Amadeus Voice Assistant - Core Domain Package
 
-Цей пакет містить чисту доменну логіку без залежностей від інфраструктури.
-Всі залежності спрямовані всередину (до цього пакету).
+This package contains pure domain logic without infrastructure dependencies.
+All dependencies are inward-facing (towards this package).
 """
 
 from amadeus.core.entities import (

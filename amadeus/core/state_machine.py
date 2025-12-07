@@ -1,35 +1,35 @@
 """
 Amadeus Core State Machine
 
-Кінцевий автомат для управління станами голосового асистента.
-Забезпечує детерміновану поведінку та безпечні переходи між станами.
+Finite state machine for managing the states of the voice assistant.
+Ensures deterministic behavior and safe transitions between states.
 
-Діаграма станів:
+State diagram:
     
-    ┌──────┐    wake_word    ┌───────────┐
-    │ IDLE │ ───────────────►│ LISTENING │
-    └──────┘                 └───────────┘
-        ▲                          │
-        │                     audio_complete
-        │                          ▼
-        │                    ┌────────────┐
-        │   cancel/error     │ PROCESSING │
-        ├───────────────────◄┤            │
-        │                    └────────────┘
-        │                          │
-        │                      plan_ready
-        │                          ▼
-        │                    ┌───────────┐
-        │   cancel/deny      │ REVIEWING │
-        ├───────────────────◄┤           │
-        │                    └───────────┘
-        │                          │
-        │                      confirm
-        │                          ▼
-        │                    ┌───────────┐
-        │   complete/error   │ EXECUTING │
-        └───────────────────◄┤           │
-                             └───────────┘
+    /------\   wake_word     /-----------\
+    | IDLE | --------------->| LISTENING |
+    \------/                 \<----------/
+        A                          |
+        |                     audio_complete
+        |                          V
+        |                    /------------\
+        |   cancel/error     | PROCESSING |
+        |-------------------<|            |
+        |                    \------------/
+        |                          |
+        |                      plan_ready
+        |                          V
+        |                    /-----------\
+        |   cancel/deny      | REVIEWING |
+        |-------------------<|           |
+        |                    \-----------/
+        |                          |
+        |                       confirm
+        |                          V
+        |                    /-----------\
+        |   complete/error   | EXECUTING |
+         -------------------<|           |
+                             \-----------/
 """
 
 from __future__ import annotations
@@ -44,31 +44,31 @@ from amadeus.core.entities import ActionPlan
 
 class AssistantState(Enum):
     """Стани голосового асистента."""
-    IDLE = auto()        # Очікування слова-активатора
-    LISTENING = auto()   # Запис голосової команди
+    IDLE = auto()        # Waiting for wake word
+    LISTENING = auto()   # Listening for voice command
     PROCESSING = auto()  # ASR/NLU/Planning
-    REVIEWING = auto()   # Очікування підтвердження користувача
-    EXECUTING = auto()   # Виконання плану дій
-    ERROR = auto()       # Стан помилки (потребує скидання)
+    REVIEWING = auto()   # Waiting for user confirmation
+    EXECUTING = auto()   # Executing action plan
+    ERROR = auto()       # Error state (requires reset)
 
 
 class StateTransition(Enum):
     """Дозволені переходи між станами."""
-    WAKE_WORD = "wake_word"           # IDLE → LISTENING
-    PUSH_TO_TALK = "push_to_talk"     # IDLE → LISTENING
-    AUDIO_COMPLETE = "audio_complete" # LISTENING → PROCESSING
-    PLAN_READY = "plan_ready"         # PROCESSING → REVIEWING
-    PLAN_SAFE = "plan_safe"           # PROCESSING → EXECUTING (автоматично для SAFE)
-    CONFIRM = "confirm"               # REVIEWING → EXECUTING
-    DENY = "deny"                     # REVIEWING → IDLE
-    CANCEL = "cancel"                 # Any → IDLE
-    COMPLETE = "complete"             # EXECUTING → IDLE
-    ERROR = "error"                   # Any → ERROR
-    RESET = "reset"                   # ERROR → IDLE
-    TIMEOUT = "timeout"               # LISTENING/REVIEWING → IDLE
+    WAKE_WORD = "wake_word"           # IDLE -> LISTENING
+    PUSH_TO_TALK = "push_to_talk"     # IDLE -> LISTENING
+    AUDIO_COMPLETE = "audio_complete" # LISTENING -> PROCESSING
+    PLAN_READY = "plan_ready"         # PROCESSING -> REVIEWING
+    PLAN_SAFE = "plan_safe"           # PROCESSING -> EXECUTING (автоматично для SAFE)
+    CONFIRM = "confirm"               # REVIEWING -> EXECUTING
+    DENY = "deny"                     # REVIEWING -> IDLE
+    CANCEL = "cancel"                 # Any -> IDLE
+    COMPLETE = "complete"             # EXECUTING -> IDLE
+    ERROR = "error"                   # Any -> ERROR
+    RESET = "reset"                   # ERROR -> IDLE
+    TIMEOUT = "timeout"               # LISTENING/REVIEWING -> IDLE
 
 
-# Матриця дозволених переходів: (current_state, transition) → next_state
+# Матриця дозволених переходів: (current_state, transition) -> next_state
 TRANSITION_TABLE: Dict[tuple[AssistantState, StateTransition], AssistantState] = {
     # From IDLE
     (AssistantState.IDLE, StateTransition.WAKE_WORD): AssistantState.LISTENING,
@@ -106,9 +106,9 @@ TRANSITION_TABLE: Dict[tuple[AssistantState, StateTransition], AssistantState] =
 @dataclass
 class StateContext:
     """
-    Контекст поточного стану.
-    
-    Зберігає дані, пов'язані з поточною сесією обробки команди.
+    Current state context.
+
+    Stores data related to the current command processing session.
     """
     session_id: str = ""
     entered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -120,7 +120,7 @@ class StateContext:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def clear(self) -> None:
-        """Очищає контекст для нової сесії."""
+        """Clear context for a new session."""
         self.session_id = ""
         self.entered_at = datetime.now(timezone.utc)
         self.raw_audio = None
@@ -131,29 +131,29 @@ class StateContext:
         self.metadata = {}
 
 
-# Тип для callback-функцій на зміну стану
+# Type for callback functions on state change
 StateChangeCallback = Callable[[AssistantState, AssistantState, StateContext], None]
 
 
 class ConfirmationStateMachine:
     """
-    Кінцевий автомат станів голосового асистента.
-    
-    Забезпечує:
-    - Детерміновану поведінку (одні й ті ж вхідні дані → один результат)
-    - Безпечні переходи (тільки дозволені переходи)
-    - Запобігання деструктивним діям без явного підтвердження
-    - Логування всіх переходів для аудиту
-    
-    Приклад використання:
+    Voice assistant confirmation state machine.
+
+    Provides:
+    - Deterministic behavior (same input -> same output)
+    - Safe transitions (only allowed transitions)
+    - Prevention of destructive actions without explicit confirmation
+    - Logging of all transitions for auditing
+
+    Example usage:
         sm = ConfirmationStateMachine()
-        sm.on_state_change(lambda old, new, ctx: print(f"{old} → {new}"))
+        sm.on_state_change(lambda old, new, ctx: print(f"{old} -> {new}"))
         
         sm.transition(StateTransition.WAKE_WORD)
-        # Тепер у стані LISTENING
+        # Now in LISTENING state
         
         sm.transition(StateTransition.AUDIO_COMPLETE)
-        # Тепер у стані PROCESSING
+        # Now in PROCESSING state
     """
 
     def __init__(self, initial_state: AssistantState = AssistantState.IDLE) -> None:
@@ -165,12 +165,12 @@ class ConfirmationStateMachine:
 
     @property
     def state(self) -> AssistantState:
-        """Поточний стан."""
+        """Current state."""
         return self._state
 
     @property
     def context(self) -> StateContext:
-        """Контекст поточного стану."""
+        """Current state context."""
         return self._context
 
     @property
@@ -198,7 +198,7 @@ class ConfirmationStateMachine:
         return self._state == AssistantState.ERROR
 
     def get_allowed_transitions(self) -> Set[StateTransition]:
-        """Повертає множину дозволених переходів з поточного стану."""
+        """Returns a set of allowed transitions from the current state."""
         allowed = set()
         for (state, transition), _ in TRANSITION_TABLE.items():
             if state == self._state:
@@ -206,21 +206,21 @@ class ConfirmationStateMachine:
         return allowed
 
     def can_transition(self, transition: StateTransition) -> bool:
-        """Перевіряє, чи можливий перехід."""
+        """Checks if the transition is possible."""
         return (self._state, transition) in TRANSITION_TABLE
 
     def transition(self, transition: StateTransition) -> bool:
         """
-        Виконує перехід у новий стан.
+        Performs a transition to a new state.
         
         Args:
-            transition: Тип переходу
-            
+            transition: Type of transition
+
         Returns:
-            True якщо перехід успішний
-            
+            True if the transition is successful
+
         Raises:
-            InvalidTransitionError: Якщо перехід не дозволений
+            InvalidTransitionError: If the transition is not allowed
         """
         key = (self._state, transition)
         
@@ -234,32 +234,32 @@ class ConfirmationStateMachine:
         old_state = self._state
         new_state = TRANSITION_TABLE[key]
         
-        # Логування переходу
+        # Logging the transition
         self._log_transition(old_state, new_state, transition)
-        
-        # Виконання переходу
+
+        # Performing the transition
         self._state = new_state
         self._context.entered_at = datetime.now(timezone.utc)
-        
-        # Очищення контексту при поверненні в IDLE
+
+        # Clearing the context when returning to IDLE
         if new_state == AssistantState.IDLE:
             self._context.clear()
-        
-        # Виклик callbacks
+
+        # Calling callbacks
         for callback in self._callbacks:
             try:
                 callback(old_state, new_state, self._context)
             except Exception:
-                # Callbacks не повинні впливати на стан машини
+                # Callbacks should not affect the state machine
                 pass
         
         return True
 
     def force_reset(self) -> None:
         """
-        Примусове скидання в IDLE.
-        
-        УВАГА: Використовувати тільки в екстрених випадках!
+        Forces a reset to IDLE.
+
+        WARNING: Use only in emergencies!
         """
         old_state = self._state
         self._state = AssistantState.IDLE
@@ -267,11 +267,11 @@ class ConfirmationStateMachine:
         self._log_transition(old_state, AssistantState.IDLE, StateTransition.RESET)
 
     def on_state_change(self, callback: StateChangeCallback) -> None:
-        """Реєструє callback для сповіщення про зміну стану."""
+        """Registers a callback for state change notifications."""
         self._callbacks.append(callback)
 
     def remove_callback(self, callback: StateChangeCallback) -> bool:
-        """Видаляє callback."""
+        """Removes a callback."""
         try:
             self._callbacks.remove(callback)
             return True
@@ -279,7 +279,7 @@ class ConfirmationStateMachine:
             return False
 
     def get_transition_history(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Повертає історію переходів."""
+        """Returns the transition history."""
         return self._transition_history[-limit:]
 
     def _log_transition(
@@ -288,7 +288,7 @@ class ConfirmationStateMachine:
         new_state: AssistantState,
         transition: StateTransition
     ) -> None:
-        """Логує перехід в історію."""
+        """Logs the transition in the history."""
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "from_state": old_state.name,
@@ -298,13 +298,13 @@ class ConfirmationStateMachine:
         }
         self._transition_history.append(entry)
         
-        # Обмеження розміру історії
+        # Maintaining max history size
         if len(self._transition_history) > self._max_history_size:
             self._transition_history = self._transition_history[-self._max_history_size:]
 
 
 class InvalidTransitionError(Exception):
-    """Виключення для недозволеного переходу."""
+    """Exception for invalid transitions."""
     pass
 
 
@@ -313,7 +313,7 @@ class InvalidTransitionError(Exception):
 # ============================================
 
 def create_state_diagram_mermaid() -> str:
-    """Генерує Mermaid діаграму станів."""
+    """Generates a Mermaid state diagram."""
     lines = ["stateDiagram-v2"]
     
     for (from_state, transition), to_state in TRANSITION_TABLE.items():
@@ -324,10 +324,10 @@ def create_state_diagram_mermaid() -> str:
 
 def get_safe_transitions_only() -> Dict[tuple[AssistantState, StateTransition], AssistantState]:
     """
-    Повертає підмножину переходів, що не включають деструктивні операції.
-    
-    Використовується для аналізу безпеки.
+    Returns a subset of transitions that do not include destructive operations.
+
+    Used for safety analysis.
     """
-    # Виключаємо CONFIRM для REVIEWING → EXECUTING якщо план деструктивний
-    # Це перевіряється runtime у PolicyEngine
+    # Exclude CONFIRM for REVIEWING -> EXECUTING if the plan is destructive
+    # This is checked at runtime in the PolicyEngine
     return TRANSITION_TABLE.copy()

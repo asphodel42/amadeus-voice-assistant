@@ -1,11 +1,11 @@
 """
 Amadeus Core Domain Ports (Interfaces)
 
-Цей модуль визначає всі порти (інтерфейси) системи.
-Порти — це контракти, які реалізуються адаптерами в інфраструктурному шарі.
+This module defines all ports (interfaces) of the system.
+Ports are contracts that are implemented by adapters in the infrastructure layer.
 
-Принцип: Домен визначає, ЩО потрібно робити.
-         Адаптери визначають, ЯК це робити.
+Principle: The domain defines WHAT needs to be done.
+           Adapters define HOW to do it.
 """
 
 from __future__ import annotations
@@ -32,60 +32,60 @@ if TYPE_CHECKING:
 @runtime_checkable
 class ProcessPort(Protocol):
     """
-    Порт для управління процесами.
-    
-    Реалізації:
-        - WindowsProcessAdapter
-        - LinuxProcessAdapter
+    Port for process management.
+
+    Implementations:
+        - WindowsAdapter
+        - LinuxAdapter
     """
 
     @abstractmethod
     def open_app(self, app_name: str, args: Optional[List[str]] = None) -> bool:
         """
-        Відкриває додаток за іменем.
+        Open application by name.
         
         Args:
-            app_name: Ім'я або шлях до додатку
-            args: Аргументи командного рядка
-            
+            app_name: Name or path to the application
+            args: Command line arguments
+
         Returns:
-            True якщо успішно запущено
-            
+            True if successfully launched
+
         Raises:
-            PermissionError: Якщо немає прав на запуск
-            FileNotFoundError: Якщо додаток не знайдено
+            PermissionError: If permission is denied
+            FileNotFoundError: If application is not found
         """
         ...
 
     @abstractmethod
     def is_app_allowed(self, app_name: str) -> bool:
-        """Перевіряє, чи додаток у білому списку."""
+        """Checks if an application is in the allowed list."""
         ...
 
     @abstractmethod
     def get_app_path(self, app_name: str) -> Optional[Path]:
-        """Отримує повний шлях до додатку."""
+        """Gets the full path to the application."""
         ...
 
 
 @runtime_checkable
 class FileSystemPort(Protocol):
     """
-    Порт для операцій з файловою системою.
-    
-    БЕЗПЕКА: Всі операції перевіряються на дозволені шляхи.
+    Port for file system operations.
+
+    SECURITY: All operations are checked against allowed paths.
     """
 
     @abstractmethod
     def list_dir(self, path: str) -> List[Dict[str, Any]]:
         """
-        Повертає список файлів та папок.
-        
+        Returns a list of files and folders.
+
         Args:
-            path: Шлях до директорії
-            
+            path: Path to the directory
+
         Returns:
-            Список словників з інформацією про файли:
+            A list of dictionaries with file information:
             [{"name": "file.txt", "type": "file", "size": 1024}, ...]
         """
         ...
@@ -93,141 +93,158 @@ class FileSystemPort(Protocol):
     @abstractmethod
     def read_file(self, path: str, max_bytes: int = 10240) -> str:
         """
-        Читає вміст файлу (з обмеженням розміру).
-        
+        Reads the contents of a file (with size limits).
+
         Args:
-            path: Шлях до файлу
-            max_bytes: Максимальний розмір для читання
-            
+            path: Path to the file
+            max_bytes: Maximum size to read
+
         Returns:
-            Вміст файлу як рядок
+            File content as a string
         """
         ...
 
     @abstractmethod
     def create_file(self, path: str, content: str = "") -> bool:
         """
-        Створює новий файл.
-        
+        Creates a new file.
+
         Args:
-            path: Шлях до файлу
-            content: Початковий вміст
-            
+            path: Path to the file
+            content: Initial content
+
         Returns:
-            True якщо успішно створено
-            
+            True if successfully created
+
         Raises:
-            FileExistsError: Якщо файл вже існує
-            PermissionError: Якщо немає прав на створення
+            FileExistsError: If file already exists
+            PermissionError: If permission is denied
         """
         ...
 
     @abstractmethod
     def write_file(self, path: str, content: str, overwrite: bool = False) -> bool:
         """
-        Записує вміст у файл.
-        
+        Writes content to a file.
+
         Args:
-            path: Шлях до файлу
-            content: Вміст для запису
-            overwrite: Чи перезаписувати існуючий файл
-            
+            path: Path to the file
+            content: Content to write
+            overwrite: Whether to overwrite existing file
+
         Returns:
-            True якщо успішно записано
+            True if successfully written
         """
         ...
 
     @abstractmethod
     def delete_path(self, path: str, recursive: bool = False) -> bool:
         """
-        Видаляє файл або папку.
-        
-        УВАГА: Деструктивна операція! Потребує typed confirmation.
-        
+        Deletes a file or folder.
+
         Args:
-            path: Шлях до файлу/папки
-            recursive: Чи видаляти рекурсивно (для папок)
-            
+            path: Path to the file/folder
+            recursive: Whether to delete recursively (for folders)
+
         Returns:
-            True якщо успішно видалено
+            True if successfully deleted
+        """
+        ...
+
+    @abstractmethod
+    def delete_path(self, path: str, recursive: bool = False) -> bool:
+        """
+        Deletes a file or folder.
+
+        WARNING: Destructive operation! Requires typed confirmation.
+
+        Args:
+            path: Path to the file/folder
+            recursive: Whether to delete recursively (for folders)
+
+        Returns:
+            True if successfully deleted
         """
         ...
 
     @abstractmethod
     def is_path_allowed(self, path: str, operation: str) -> bool:
         """
-        Перевіряє, чи дозволена операція для шляху.
-        
+        Checks if an operation is allowed for a path.
+
         Args:
-            path: Шлях для перевірки
-            operation: Тип операції (read, write, delete)
-            
+            path: Path to check
+            operation: Type of operation (read, write, delete)
+
         Returns:
-            True якщо дозволено
+            True if allowed
         """
         ...
 
     @abstractmethod
     def path_exists(self, path: str) -> bool:
-        """Перевіряє, чи існує шлях."""
+        """Checks if a path exists."""
         ...
 
 
 @runtime_checkable
 class BrowserPort(Protocol):
     """
-    Порт для операцій з браузером.
-    
-    БЕЗПЕКА: Тільки відкриття URL через системний браузер.
-             Ніяких прихованих мережевих запитів.
+    Port for browser operations.
+
+    SECURITY: Only opening URLs via the system browser.
+             No hidden network requests.
     """
 
     @abstractmethod
     def open_url(self, url: str) -> bool:
         """
-        Відкриває URL у браузері за замовчуванням.
-        
+        Opens a URL in the default browser.
+
         Args:
-            url: URL для відкриття
-            
+            url: URL to open
+
         Returns:
-            True якщо успішно відкрито
+            True if successfully opened
         """
         ...
 
     @abstractmethod
     def search_web(self, query: str, engine: str = "default") -> bool:
         """
-        Виконує пошук у вебі.
-        
+        Performs a web search.
+
         Args:
-            query: Пошуковий запит
-            engine: Пошукова система (default, google, duckduckgo)
-            
+            query: Search query
+            engine: Search engine (default, google, duckduckgo)
+
         Returns:
-            True якщо успішно відкрито пошук
+            True if successfully opened search
         """
         ...
 
     @abstractmethod
     def is_url_safe(self, url: str) -> bool:
         """
-        Перевіряє безпечність URL.
-        
+        Checks if a URL is safe.
+
+        Args:
+            url: URL to check
+
         Returns:
-            True для HTTPS URL та дозволених доменів
+            True for HTTPS URLs and allowed domains
         """
         ...
 
 
 @runtime_checkable
 class SystemInfoPort(Protocol):
-    """Порт для отримання системної інформації."""
+    """Port for system information retrieval."""
 
     @abstractmethod
     def get_system_info(self) -> Dict[str, Any]:
         """
-        Повертає загальну інформацію про систему.
+        Returns general information about the system.
         
         Returns:
             {"os": "Windows 11", "cpu": "...", "memory": {...}, ...}
@@ -236,12 +253,12 @@ class SystemInfoPort(Protocol):
 
     @abstractmethod
     def get_memory_info(self) -> Dict[str, int]:
-        """Повертає інформацію про пам'ять."""
+        """Returns memory information."""
         ...
 
     @abstractmethod
     def get_disk_info(self) -> List[Dict[str, Any]]:
-        """Повертає інформацію про диски."""
+        """Returns disk information."""
         ...
 
 
@@ -251,26 +268,26 @@ class SystemInfoPort(Protocol):
 
 @runtime_checkable
 class WakeWordPort(Protocol):
-    """Порт для розпізнавання слова-активатора."""
+    """Port for wake word recognition."""
 
     @abstractmethod
     def start_listening(self) -> None:
-        """Починає прослуховування слова-активатора."""
+        """Starts listening for the wake word."""
         ...
 
     @abstractmethod
     def stop_listening(self) -> None:
-        """Зупиняє прослуховування."""
+        """Stops listening for the wake word."""
         ...
 
     @abstractmethod
     def is_activated(self) -> bool:
-        """Перевіряє, чи було розпізнано слово-активатор."""
+        """Checks if the wake word has been detected."""
         ...
 
     @abstractmethod
     def set_wake_word(self, word: str) -> bool:
-        """Встановлює слово-активатор."""
+        """Sets the wake word."""
         ...
 
 
@@ -281,67 +298,67 @@ class ASRPort(Protocol):
     @abstractmethod
     def transcribe(self, audio_data: bytes) -> str:
         """
-        Транскрибує аудіо в текст.
-        
+        Transcribes audio to text.
+
         Args:
-            audio_data: Аудіо дані у форматі PCM
-            
+            audio_data: Audio data in PCM format
+
         Returns:
-            Розпізнаний текст
+            Recognized text
         """
         ...
 
     @abstractmethod
     def start_stream(self) -> None:
-        """Починає потокове розпізнавання."""
+        """Starts streaming recognition."""
         ...
 
     @abstractmethod
     def stop_stream(self) -> str:
         """
-        Зупиняє потокове розпізнавання.
-        
+        Stops streaming recognition.
+
         Returns:
-            Фінальний розпізнаний текст
+            Final recognized text
         """
         ...
 
 
 @runtime_checkable
 class NLUPort(Protocol):
-    """Порт для розуміння природної мови (Natural Language Understanding)."""
+    """Port for natural language understanding (NLU)."""
 
     @abstractmethod
     def parse(self, text: str) -> "Intent":
         """
-        Парсить текст у структурований намір.
+        Parses text into a structured intent.
         
         Args:
-            text: Текст команди
-            
+            text: Command text
+
         Returns:
-            Розпізнаний намір зі слотами
+            Recognized intent with slots
         """
         ...
 
 
 @runtime_checkable
 class TTSPort(Protocol):
-    """Порт для синтезу мови (Text-to-Speech)."""
+    """Port for text-to-speech synthesis (TTS)."""
 
     @abstractmethod
     def speak(self, text: str) -> None:
         """
-        Озвучує текст.
+        Speaks the given text.
         
         Args:
-            text: Текст для озвучування
+            text: Text to be spoken
         """
         ...
 
     @abstractmethod
     def stop(self) -> None:
-        """Зупиняє поточне озвучування."""
+        """Stops the current speech."""
         ...
 
 
@@ -352,21 +369,21 @@ class TTSPort(Protocol):
 @runtime_checkable
 class AuditPort(Protocol):
     """
-    Порт для журналу аудиту.
-    
-    ВАЖЛИВО: Журнал є append-only для забезпечення integrity.
+    Port for audit logging.
+
+    IMPORTANT: The log is append-only to ensure integrity.
     """
 
     @abstractmethod
     def append_event(self, event: "AuditEvent") -> str:
         """
-        Додає подію до журналу.
-        
+        Adds an event to the log.
+
         Args:
-            event: Подія для логування
-            
+            event: Event to log
+
         Returns:
-            ID створеної події
+            ID of the created event
         """
         ...
 
@@ -379,52 +396,52 @@ class AuditPort(Protocol):
         limit: int = 100
     ) -> List["AuditEvent"]:
         """
-        Отримує події з журналу.
-        
+        Retrieves events from the log.
+
         Args:
-            start_time: Початок періоду (ISO format)
-            end_time: Кінець періоду (ISO format)
-            event_type: Фільтр за типом події
-            limit: Максимальна кількість подій
+            start_time: Start time (ISO format)
+            end_time: End time (ISO format)
+            event_type: Filter by event type
+            limit: Maximum number of events
             
         Returns:
-            Список подій
+            List of events
         """
         ...
 
     @abstractmethod
     def verify_integrity(self) -> bool:
         """
-        Перевіряє цілісність журналу (hash chain).
-        
+        Verifies the integrity of the log (hash chain).
+
         Returns:
-            True якщо журнал не було модифіковано
+            True if the log has not been modified
         """
         ...
 
     @abstractmethod
     def get_last_hash(self) -> str:
-        """Повертає хеш останньої події."""
+        """Returns the hash of the last event."""
         ...
 
 
 @runtime_checkable
 class ConfigPort(Protocol):
-    """Порт для зберігання конфігурації."""
+    """Port for configuration storage."""
 
     @abstractmethod
     def get(self, key: str, default: Any = None) -> Any:
-        """Отримує значення конфігурації."""
+        """Retrieves a configuration value."""
         ...
 
     @abstractmethod
     def set(self, key: str, value: Any) -> None:
-        """Встановлює значення конфігурації."""
+        """Sets a configuration value."""
         ...
 
     @abstractmethod
     def get_all(self) -> Dict[str, Any]:
-        """Повертає всю конфігурацію."""
+        """Returns all configuration."""
         ...
 
 
@@ -435,9 +452,9 @@ class ConfigPort(Protocol):
 @runtime_checkable
 class PolicyPort(Protocol):
     """
-    Порт для двигуна політик безпеки.
-    
-    Перевіряє ActionPlan проти capabilities та правил ризику.
+    Port for the security policy engine.
+
+    Evaluates ActionPlan against capabilities and risk rules.
     """
 
     @abstractmethod
@@ -447,55 +464,58 @@ class PolicyPort(Protocol):
         capabilities: List["Capability"]
     ) -> "PolicyDecision":
         """
-        Оцінює план дій.
-        
+        Evaluates the action plan.
+
         Args:
-            plan: План для оцінки
-            capabilities: Доступні можливості
-            
+            plan: Action plan to evaluate
+            capabilities: Available capabilities
+
         Returns:
-            Рішення політики (allowed/denied + причина)
+            Policy decision (allowed/denied + reason)
         """
         ...
 
     @abstractmethod
     def get_required_confirmations(self, plan: "ActionPlan") -> List[str]:
         """
-        Визначає, які підтвердження потрібні для плану.
-        
+        Determines the required confirmations for plan.
+
+        Args:
+            plan: Action plan to evaluate
+
         Returns:
-            Список описів підтверджень
+            List of confirmation descriptions
         """
         ...
 
 
 @runtime_checkable
 class SignaturePort(Protocol):
-    """Порт для перевірки підписів плагінів."""
+    """Port for verifying plugin signatures."""
 
     @abstractmethod
     def verify_manifest(self, manifest: "CapabilityManifest") -> bool:
         """
-        Перевіряє підпис маніфесту.
+        Verifies the signature of the manifest.
         
         Returns:
-            True якщо підпис валідний
+            True if the signature is valid
         """
         ...
 
     @abstractmethod
     def sign_manifest(self, manifest: "CapabilityManifest", private_key: bytes) -> str:
         """
-        Підписує маніфест.
-        
+        Signs the manifest.
+
         Returns:
-            Підпис у форматі Base64
+            Signature in Base64 format
         """
         ...
 
     @abstractmethod
     def add_trusted_publisher(self, publisher_id: str, public_key: bytes) -> None:
-        """Додає довіреного видавця."""
+        """Adds a trusted publisher."""
         ...
 
 
@@ -505,16 +525,16 @@ class SignaturePort(Protocol):
 
 @runtime_checkable
 class DialogPort(Protocol):
-    """Порт для діалогу з користувачем."""
+    """Port for user dialog."""
 
     @abstractmethod
     def show_message(self, message: str, title: str = "Amadeus") -> None:
-        """Показує інформаційне повідомлення."""
+        """Shows an informational message."""
         ...
 
     @abstractmethod
     def show_error(self, message: str, title: str = "Error") -> None:
-        """Показує повідомлення про помилку."""
+        """Shows an error message."""
         ...
 
     @abstractmethod
@@ -524,14 +544,14 @@ class DialogPort(Protocol):
         timeout_seconds: int = 30
     ) -> bool:
         """
-        Показує діалог підтвердження для плану.
-        
+        Shows a confirmation dialog for the plan.
+
         Args:
-            plan: План для підтвердження
-            timeout_seconds: Таймаут очікування
-            
+            plan: Action plan to confirm
+            timeout_seconds: Timeout duration
+
         Returns:
-            True якщо користувач підтвердив
+            True if the user confirmed
         """
         ...
 
@@ -542,14 +562,14 @@ class DialogPort(Protocol):
         confirmation_phrase: str
     ) -> bool:
         """
-        Показує діалог з typed confirmation для деструктивних операцій.
-        
+        Shows a dialog with typed confirmation for destructive operations.
+
         Args:
-            plan: План для підтвердження
-            confirmation_phrase: Фраза, яку користувач повинен ввести
-            
+            plan: Action plan to confirm
+            confirmation_phrase: Phrase that the user must enter
+
         Returns:
-            True якщо користувач ввів правильну фразу
+            True if the user entered the correct phrase
         """
         ...
 
@@ -560,24 +580,24 @@ class DialogPort(Protocol):
 
 @runtime_checkable
 class PolicyDecision(Protocol):
-    """Результат оцінки політики."""
-    
+    """Result of policy evaluation."""
+
     @property
     def allowed(self) -> bool:
-        """Чи дозволено виконання."""
+        """Is execution allowed?"""
         ...
     
     @property
     def reason(self) -> str:
-        """Причина рішення."""
+        """Reason for the decision."""
         ...
     
     @property
     def requires_confirmation(self) -> bool:
-        """Чи потрібне підтвердження."""
+        """Is confirmation required?"""
         ...
     
     @property
     def confirmation_type(self) -> str:
-        """Тип підтвердження (simple, typed, passcode)."""
+        """Type of confirmation (simple, typed, passcode)."""
         ...
