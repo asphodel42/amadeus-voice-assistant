@@ -1,13 +1,13 @@
 """
 SQLite Audit Adapter
 
-Append-only журнал аудиту з hash chain integrity.
-Зберігає всі події для аналізу та compliance.
+Append-only audit journal with hash chain integrity.
+Stores all events for analysis and compliance.
 
-Безпека:
-- Append-only: події не можна видаляти або модифікувати
-- Hash chain: кожен запис містить хеш попереднього
-- Periodic verification: можливість перевірки цілісності
+Security:
+- Append-only: events cannot be deleted or modified
+- Hash chain: each record contains the hash of the previous one
+- Periodic verification: ability to verify integrity
 """
 
 from __future__ import annotations
@@ -33,22 +33,25 @@ from amadeus.core.entities import (
 class SQLiteAuditAdapter:
     """
     SQLite-based append-only audit log.
+
+    Implements AuditPort from core/ports.py.
+
+    Examples:
+
+    ```
+    audit = SQLiteAuditAdapter("~/.amadeus/audit.db")
     
-    Реалізує AuditPort з core/ports.py.
+    event = AuditEvent(
+        event_type="command",
+        actor="user",
+        command_request=request,
+    )
+    audit.append_event(event)
     
-    Приклад використання:
-        audit = SQLiteAuditAdapter("~/.amadeus/audit.db")
-        
-        event = AuditEvent(
-            event_type="command",
-            actor="user",
-            command_request=request,
-        )
-        audit.append_event(event)
-        
-        # Перевірка цілісності
-        if not audit.verify_integrity():
-            print("WARNING: Audit log has been tampered with!")
+    # Verify integrity
+    if not audit.verify_integrity():
+        print("WARNING: Audit log has been tampered with!")
+    ```
     """
 
     def __init__(
@@ -69,7 +72,7 @@ class SQLiteAuditAdapter:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             
-            # Основна таблиця подій
+            # Main table for events
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS audit_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,8 +86,8 @@ class SQLiteAuditAdapter:
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
-            # Індекси для швидкого пошуку
+
+            # Indexes for fast searching
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_timestamp 
                 ON audit_events(timestamp)
@@ -97,8 +100,8 @@ class SQLiteAuditAdapter:
                 CREATE INDEX IF NOT EXISTS idx_actor 
                 ON audit_events(actor)
             """)
-            
-            # Таблиця для checkpoints (періодичні підписані знімки)
+
+            # Table for checkpoints (periodic signed snapshots)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS integrity_checkpoints (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,7 +116,7 @@ class SQLiteAuditAdapter:
 
     @contextmanager
     def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager для з'єднання з базою даних."""
+        """Context manager for database connection."""
         conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         conn.row_factory = sqlite3.Row
         try:
@@ -123,22 +126,22 @@ class SQLiteAuditAdapter:
 
     def append_event(self, event: AuditEvent) -> str:
         """
-        Додає подію до журналу.
-        
+        Add event to the log.
+
         Args:
-            event: Подія для логування
-            
+            event: Event to log
+
         Returns:
-            ID створеної події
+            ID of the created event
         """
         with self._lock:
-            # Отримуємо хеш останньої події
+            # Get the hash of the last event
             previous_hash = self.get_last_hash()
-            
-            # Серіалізуємо дані події
+
+            # Serialize event data
             event_data = self._serialize_event(event)
-            
-            # Обчислюємо хеш події
+
+            # Compute event hash
             event_hash = self._compute_hash(
                 event.event_id,
                 event.timestamp.isoformat(),
@@ -177,18 +180,18 @@ class SQLiteAuditAdapter:
         offset: int = 0,
     ) -> List[AuditEvent]:
         """
-        Отримує події з журналу.
-        
+        Get events from the log.
+
         Args:
-            start_time: Початок періоду (ISO format)
-            end_time: Кінець періоду (ISO format)
-            event_type: Фільтр за типом події
-            actor: Фільтр за актором
-            limit: Максимальна кількість подій
-            offset: Зсув для пагінації
-            
+            start_time: Start of the period (ISO format)
+            end_time: End of the period (ISO format)
+            event_type: Filter by event type
+            actor: Filter by actor
+            limit: Maximum number of events
+            offset: Offset for pagination
+
         Returns:
-            Список подій
+            List of events
         """
         query = "SELECT * FROM audit_events WHERE 1=1"
         params: List[Any] = []
@@ -220,7 +223,7 @@ class SQLiteAuditAdapter:
         return [self._row_to_event(row) for row in rows]
 
     def get_last_hash(self) -> str:
-        """Повертає хеш останньої події."""
+        """Get the hash of the last event."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -231,14 +234,14 @@ class SQLiteAuditAdapter:
         
         if row:
             return row["event_hash"]
-        return "GENESIS"  # Початковий хеш для першої події
+        return "GENESIS"  # Initial hash for the first event
 
     def verify_integrity(self) -> bool:
         """
-        Перевіряє цілісність журналу (hash chain).
-        
+        Verify the integrity of the log (hash chain).
+
         Returns:
-            True якщо журнал не було модифіковано
+            True if the log has not been modified
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -250,16 +253,16 @@ class SQLiteAuditAdapter:
             rows = cursor.fetchall()
         
         if not rows:
-            return True  # Порожній журнал валідний
-        
+            return True  # Empty log is valid
+
         expected_previous_hash = "GENESIS"
         
         for row in rows:
-            # Перевіряємо, що previous_hash співпадає
+            # Check that previous_hash matches
             if row["previous_hash"] != expected_previous_hash:
                 return False
-            
-            # Перевіряємо, що event_hash правильний
+
+            # Check that event_hash is correct
             computed_hash = self._compute_hash(
                 row["event_id"],
                 row["timestamp"],
@@ -278,16 +281,16 @@ class SQLiteAuditAdapter:
 
     def create_checkpoint(self) -> str:
         """
-        Створює checkpoint для періодичної перевірки.
+        Create checkpoint for periodic verification.
         
         Returns:
-            Cumulative hash для checkpoint
+            Cumulative hash for checkpoint
         """
         with self._lock:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
-                # Отримуємо останню подію
+
+                # Get the last event
                 cursor.execute("""
                     SELECT id, event_hash FROM audit_events 
                     ORDER BY id DESC LIMIT 1
@@ -299,8 +302,8 @@ class SQLiteAuditAdapter:
                 
                 last_id = row["id"]
                 cumulative_hash = row["event_hash"]
-                
-                # Зберігаємо checkpoint
+
+                # Save checkpoint
                 cursor.execute("""
                     INSERT INTO integrity_checkpoints 
                     (checkpoint_time, last_event_id, cumulative_hash)
@@ -324,14 +327,14 @@ class SQLiteAuditAdapter:
 
     def export_to_json(self, filepath: str, limit: int = 10000) -> int:
         """
-        Експортує журнал у JSON файл.
-        
+        Export the log to a JSON file.
+
         Args:
-            filepath: Шлях до файлу
-            limit: Максимальна кількість подій
-            
+            filepath: Path to the file
+            limit: Maximum number of events
+
         Returns:
-            Кількість експортованих подій
+            Number of exported events
         """
         events = self.get_events(limit=limit, offset=0)
         
@@ -356,7 +359,7 @@ class SQLiteAuditAdapter:
         return len(events)
 
     def _serialize_event(self, event: AuditEvent) -> str:
-        """Серіалізує подію у JSON."""
+        """Serialize event to JSON."""
         data: Dict[str, Any] = {
             "event_id": event.event_id,
             "event_type": event.event_type,
@@ -388,7 +391,7 @@ class SQLiteAuditAdapter:
         return json.dumps(data, ensure_ascii=False)
 
     def _row_to_event(self, row: sqlite3.Row) -> AuditEvent:
-        """Конвертує рядок бази даних у AuditEvent."""
+        """Convert a database row to an AuditEvent."""
         data = json.loads(row["data"])
         
         return AuditEvent(
@@ -401,6 +404,6 @@ class SQLiteAuditAdapter:
         )
 
     def _compute_hash(self, *args: str) -> str:
-        """Обчислює SHA-256 хеш."""
+        """Compute SHA-256 hash."""
         content = "|".join(str(arg) for arg in args)
         return hashlib.sha256(content.encode("utf-8")).hexdigest()

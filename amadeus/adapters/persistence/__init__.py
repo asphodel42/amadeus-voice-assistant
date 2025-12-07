@@ -1,7 +1,7 @@
 """
 Amadeus Persistence Adapters Package
 
-Адаптери для збереження даних:
+Adapters for data storage:
 - Audit Log (SQLite)
 - Configuration
 """
