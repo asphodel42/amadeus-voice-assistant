@@ -115,6 +115,28 @@ def run_single_command(pipeline: VoicePipeline, command: str, dry_run: bool = Fa
         return 1
 
 
+def run_voice_mode(pipeline: VoicePipeline, skip_wake_word: bool = False) -> int:
+    """Runs the voice control mode."""
+    print("=" * 60)
+    print("Amadeus Voice Assistant - Voice Mode")
+    print("=" * 60)
+    print()
+    print("Listening for voice commands...")
+    print(f"Say '{pipeline.config.wake_word.title()}' to activate, then speak your command.")
+    print("Press Ctrl+C to stop.")
+    print()
+    
+    try:
+        pipeline.run_voice_loop(skip_wake_word=skip_wake_word)
+        return 0
+    except KeyboardInterrupt:
+        print("\nVoice mode stopped")
+        return 0
+    except Exception as e:
+        print(f"Voice mode error: {e}")
+        return 1
+
+
 def main(args: Optional[list] = None) -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -141,6 +163,47 @@ def main(args: Optional[list] = None) -> int:
     )
     
     parser.add_argument(
+        "--voice",
+        action="store_true",
+        help="Enable voice control mode (requires microphone)",
+    )
+    
+    parser.add_argument(
+        "--no-wake-word",
+        action="store_true",
+        help="Skip wake word detection (voice mode only)",
+    )
+    
+    parser.add_argument(
+        "--wake-word",
+        type=str,
+        default="amadeus",
+        choices=["amadeus", "jarvis", "computer", "alexa", "hey google", "hey siri", "ok google"],
+        help="Wake word to use (default: amadeus)",
+    )
+    
+    parser.add_argument(
+        "--whisper-model",
+        type=str,
+        default="medium",
+        choices=["tiny", "base", "small", "medium", "large-v2", "large-v3"],
+        help="Whisper ASR model size (default: medium). Larger = better quality but slower.",
+    )
+    
+    parser.add_argument(
+        "--language",
+        type=str,
+        default="uk",
+        help="ASR language code (default: 'uk' for Ukrainian). Use 'en' for English or 'auto' for auto-detect.",
+    )
+    
+    parser.add_argument(
+        "--no-tts",
+        action="store_true",
+        help="Disable text-to-speech output",
+    )
+    
+    parser.add_argument(
         "--version",
         action="version",
         version="Amadeus Voice Assistant v0.1.0",
@@ -151,16 +214,25 @@ def main(args: Optional[list] = None) -> int:
     # Sets up logging
     setup_logging(parsed.verbose)
 
+    # Handle "auto" language as None
+    language = parsed.language if parsed.language != "auto" else None
+
     # Creates the pipeline
     config = PipelineConfig(
         dry_run_by_default=parsed.dry_run,
         verbose_logging=parsed.verbose,
+        wake_word=parsed.wake_word,
+        whisper_model_size=parsed.whisper_model,
+        whisper_language=language,
+        tts_enabled=not parsed.no_tts,
     )
     pipeline = VoicePipeline(config=config)
 
-    # Execute command
+    # Execute based on mode
     if parsed.command:
         return run_single_command(pipeline, parsed.command, parsed.dry_run)
+    elif parsed.voice:
+        return run_voice_mode(pipeline, skip_wake_word=parsed.no_wake_word)
     else:
         run_interactive(pipeline)
         return 0

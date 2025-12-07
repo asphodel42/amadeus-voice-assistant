@@ -1,0 +1,335 @@
+"""
+Amadeus Audio Input Adapter
+
+Implements collected audio from microphone using PyAudio.
+Provides streaming audio reading for ASR and Wake Word detection.
+
+Usage:
+    audio = PyAudioInputAdapter()
+    audio.start_stream()
+    
+    while True:
+        frame = audio.read_frame()
+        if frame:
+            process(frame)
+    
+    audio.stop_stream()
+"""
+
+from __future__ import annotations
+
+import logging
+import struct
+from typing import Callable, List, Optional, Tuple
+
+try:
+    import pyaudio
+    PYAUDIO_AVAILABLE = True
+except ImportError:
+    PYAUDIO_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
+
+
+class PyAudioInputAdapter:
+    """
+    PyAudio-based audio adapter.
+    
+    Provides streaming audio reading from microphone.
+    
+    Attributes:
+        sample_rate: Sample rate (typically 16000 Hz)
+        frame_length: Number of samples per frame
+        channels: Number of channels (1 = mono)
+    """
+    
+    DEFAULT_SAMPLE_RATE = 16000
+    DEFAULT_CHANNELS = 1
+    DEFAULT_FORMAT = pyaudio.paInt16 if PYAUDIO_AVAILABLE else None
+    
+    def __init__(
+        self,
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
+        frame_length: int = 512,
+        channels: int = DEFAULT_CHANNELS,
+        input_device_index: Optional[int] = None
+    ) -> None:
+        """
+        Initialize PyAudio adapter.
+        
+        Args:
+            sample_rate: Sample rate in Hz (default: 16000)
+            frame_length: Number of samples per frame (for Porcupine = 512)
+            channels: Number of channels (1 = mono)
+            input_device_index: Input device index (None = default)
+        
+        Raises:
+            RuntimeError: If PyAudio is not available
+        """
+        if not PYAUDIO_AVAILABLE:
+            raise RuntimeError(
+                "PyAudio is not installed. Install with: pip install pyaudio\n"
+                "On Linux: sudo apt install python3-pyaudio portaudio19-dev"
+            )
+        
+        self.sample_rate = sample_rate
+        self.frame_length = frame_length
+        self.channels = channels
+        self.input_device_index = input_device_index
+        
+        # Initialize PyAudio
+        self._pa = pyaudio.PyAudio()
+        self._stream: Optional[pyaudio.Stream] = None
+        self._is_streaming = False
+        
+        logger.info(
+            f"PyAudio initialized: sample_rate={sample_rate}, "
+            f"frame_length={frame_length}, channels={channels}"
+        )
+    
+    def start_stream(self) -> None:
+        """
+        Opens audio stream from microphone.
+        
+        Raises:
+            RuntimeError: If unable to open stream
+        """
+        if self._stream is not None:
+            logger.warning("Stream is already open")
+            return
+        
+        try:
+            self._stream = self._pa.open(
+                rate=self.sample_rate,
+                channels=self.channels,
+                format=pyaudio.paInt16,
+                input=True,
+                frames_per_buffer=self.frame_length,
+                input_device_index=self.input_device_index
+            )
+            self._is_streaming = True
+            logger.info("Audio stream opened")
+        except Exception as e:
+            raise RuntimeError(f"Error opening audio stream: {e}")
+    
+    def stop_stream(self) -> None:
+        """Closes audio stream."""
+        if self._stream:
+            try:
+                self._stream.stop_stream()
+                self._stream.close()
+                logger.info("Audio stream closed")
+            except Exception as e:
+                logger.error(f"Error closing stream: {e}")
+            finally:
+                self._stream = None
+                self._is_streaming = False
+    
+    def read_frame(self) -> Optional[bytes]:
+        """
+        Reads one frame of audio data.
+        
+        Returns:
+            bytes with audio data or None if error
+        """
+        if not self._stream:
+            logger.warning("Stream is not open")
+            return None
+        
+        try:
+            # Check if data is available (to support Ctrl+C on Windows)
+            available = self._stream.get_read_available()
+            if available < self.frame_length:
+                # Not enough data - wait a bit
+                import time
+                time.sleep(0.01)  # 10ms - allows Ctrl+C to be processed
+                return None
+            
+            data = self._stream.read(
+                self.frame_length,
+                exception_on_overflow=False
+            )
+            return data
+        except KeyboardInterrupt:
+            raise  # Pass Ctrl+C further
+        except Exception as e:
+            logger.error(f"Error reading audio: {e}")
+            return None
+    
+    def read_frame_as_int16(self) -> Optional[List[int]]:
+        """
+        Reads one frame and converts to int16 list.
+        
+        This format is required for Porcupine.
+        
+        Returns:
+            List of int16 values or None
+        """
+        data = self.read_frame()
+        if data is None:
+            return None
+        
+        try:
+            # Unpack bytes to int16 list
+            unpacked = struct.unpack_from(
+                "h" * self.frame_length,
+                data
+            )
+            return list(unpacked)
+        except Exception as e:
+            logger.error(f"Error converting audio: {e}")
+            return None
+    
+    def read_seconds(
+        self, 
+        seconds: float,
+        stop_check: Optional[Callable[[], bool]] = None
+    ) -> bytes:
+        """
+        Reads audio for specified number of seconds.
+        
+        Args:
+            seconds: Recording duration in seconds
+            stop_check: Function to check if should stop
+                       (returns True if should stop)
+            
+        Returns:
+            bytes with audio data
+        """
+        if not self._stream:
+            logger.warning("Stream is not open")
+            return b""
+        
+        num_frames = int(self.sample_rate * seconds / self.frame_length)
+        audio_chunks = []
+        frames_read = 0
+        
+        logger.debug(f"Reading {num_frames} frames ({seconds} sec)")
+        
+        while frames_read < num_frames:
+            # Check if should stop
+            if stop_check and stop_check():
+                logger.debug(f"Stopping recording at frame {frames_read}")
+                break
+                
+            frame = self.read_frame()
+            if frame:
+                audio_chunks.append(frame)
+                frames_read += 1
+            # If frame is None, we just wait (sleep is in read_frame)
+        
+        audio_data = b"".join(audio_chunks)
+        logger.debug(f"Recorded {len(audio_data)} bytes of audio ({frames_read} frames)")
+        
+        return audio_data
+    
+    def is_streaming(self) -> bool:
+        """Checks if stream is active."""
+        return self._is_streaming and self._stream is not None
+    
+    def get_available_devices(self) -> List[dict]:
+        """
+        Returns list of available input audio devices.
+        
+        Returns:
+            List of dicts with device information:
+            [{"index": 0, "name": "Microphone", "channels": 2, ...}, ...]
+        """
+        devices = []
+        
+        for i in range(self._pa.get_device_count()):
+            info = self._pa.get_device_info_by_index(i)
+            
+            # Only input devices
+            if info.get("maxInputChannels", 0) > 0:
+                devices.append({
+                    "index": i,
+                    "name": info.get("name", "Unknown"),
+                    "channels": info.get("maxInputChannels", 0),
+                    "sample_rate": int(info.get("defaultSampleRate", 0)),
+                    "is_default": i == self._pa.get_default_input_device_info().get("index")
+                })
+        
+        return devices
+    
+    def set_device(self, device_index: int) -> bool:
+        """
+        Sets input device.
+        
+        WARNING: If stream is open, it will be restarted!
+        
+        Args:
+            device_index: Device index
+            
+        Returns:
+            True if successful
+        """
+        was_streaming = self._is_streaming
+        
+        if was_streaming:
+            self.stop_stream()
+        
+        self.input_device_index = device_index
+        logger.info(f"Input device changed to: {device_index}")
+        
+        if was_streaming:
+            self.start_stream()
+        
+        return True
+    
+    def cleanup(self) -> None:
+        """Releases all PyAudio resources."""
+        self.stop_stream()
+        if self._pa:
+            self._pa.terminate()
+            logger.debug("PyAudio terminated")
+    
+    def __del__(self) -> None:
+        """Destructor — releases resources."""
+        self.cleanup()
+    
+    def __enter__(self) -> "PyAudioInputAdapter":
+        """Context manager entry."""
+        self.start_stream()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Context manager exit."""
+        self.cleanup()
+
+
+class MockAudioInputAdapter:
+    """
+    Mock audio adapter for testing.
+    
+    Generates silence or predefined data.
+    """
+    
+    def __init__(self, frame_length: int = 512) -> None:
+        self.frame_length = frame_length
+        self.sample_rate = 16000
+        self._is_streaming = False
+    
+    def start_stream(self) -> None:
+        """Starts mock stream."""
+        self._is_streaming = True
+    
+    def stop_stream(self) -> None:
+        """Stops mock stream."""
+        self._is_streaming = False
+    
+    def read_frame(self) -> bytes:
+        """Returns silence (zeros)."""
+        return b'\x00' * (self.frame_length * 2)  # 2 bytes per int16
+    
+    def read_frame_as_int16(self) -> List[int]:
+        """Returns list of zeros."""
+        return [0] * self.frame_length
+    
+    def is_streaming(self) -> bool:
+        """Checks mock state."""
+        return self._is_streaming
+    
+    def cleanup(self) -> None:
+        """Does nothing."""
+        pass

@@ -44,6 +44,9 @@ class BaseOSAdapter(ABC):
             home / "Documents",
             home / "Downloads",
             home / "Desktop",
+            home / "Pictures",
+            home / "Music",
+            home / "Videos",
         }
 
         # Create directories if they don't exist

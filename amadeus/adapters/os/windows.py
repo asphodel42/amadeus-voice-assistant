@@ -451,13 +451,21 @@ class WindowsAdapter(BaseOSAdapter):
             return f.read()
 
     def create_file(self, path: str, content: str = "") -> bool:
-        """Create a new file."""
+        """Create a new file. If file exists, adds a number suffix."""
         if not self.is_path_allowed(path, "write"):
             raise PermissionError(f"Access denied to path: {path}")
         
         target = Path(path).expanduser().resolve()
+        
+        # If file exists, find a unique name
         if target.exists():
-            raise FileExistsError(f"File already exists: {path}")
+            base = target.stem
+            suffix = target.suffix
+            parent = target.parent
+            counter = 1
+            while target.exists():
+                target = parent / f"{base}_{counter}{suffix}"
+                counter += 1
 
         # Create parent directories if needed
         target.parent.mkdir(parents=True, exist_ok=True)

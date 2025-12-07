@@ -321,7 +321,8 @@ class TestDeterministicNLU:
         intent = nlu.parse("відкрий калькулятор")
         
         assert intent.intent_type == IntentType.OPEN_APP
-        assert "калькулятор" in intent.slots["app_name"]
+        # Ukrainian "калькулятор" is converted to English "calculator"
+        assert intent.slots["app_name"] == "calculator"
     
     def test_ukrainian_search(self, nlu):
         """Tests the Ukrainian search command."""
@@ -329,6 +330,65 @@ class TestDeterministicNLU:
         
         assert intent.intent_type == IntentType.WEB_SEARCH
         assert "рецепти борщу" in intent.slots["query"]
+    
+    def test_ukrainian_open_site(self, nlu):
+        """Tests Ukrainian site shortcuts like 'відкрий ютуб'."""
+        intent = nlu.parse("відкрий ютуб")
+        
+        assert intent.intent_type == IntentType.OPEN_URL
+        assert intent.slots["url"] == "https://youtube.com"
+    
+    def test_ukrainian_list_dir(self, nlu):
+        """Tests Ukrainian list directory command."""
+        intent = nlu.parse("покажи файли в завантаженнях")
+        
+        assert intent.intent_type == IntentType.LIST_DIR
+    
+    # ============================================
+    # ASR Variation Tests (Whisper tolerance)
+    # ============================================
+    
+    def test_asr_variation_vidkry(self, nlu):
+        """Tests ASR variation 'відкри' (without й)."""
+        intent = nlu.parse("відкри калькулятор")
+        
+        assert intent.intent_type == IntentType.OPEN_APP
+        assert intent.slots["app_name"] == "calculator"
+    
+    def test_asr_variation_vidkryv(self, nlu):
+        """Tests ASR variation 'відкрив' (past tense)."""
+        intent = nlu.parse("відкрив калькулятор")
+        
+        assert intent.intent_type == IntentType.OPEN_APP
+        assert intent.slots["app_name"] == "calculator"
+    
+    def test_asr_variation_vidkraj(self, nlu):
+        """Tests ASR variation 'відкрай' (imperative alternative)."""
+        intent = nlu.parse("відкрай ютуб")
+        
+        assert intent.intent_type == IntentType.OPEN_URL
+        assert intent.slots["url"] == "https://youtube.com"
+    
+    def test_asr_variation_app_name_typo(self, nlu):
+        """Tests ASR variation with misspelled app name."""
+        intent = nlu.parse("відкрий калікулятор")
+        
+        assert intent.intent_type == IntentType.OPEN_APP
+        assert intent.slots["app_name"] == "calculator"
+    
+    def test_asr_variation_with_trailing_period(self, nlu):
+        """Tests ASR output with trailing period."""
+        intent = nlu.parse("відкрий калькулятор.")
+        
+        assert intent.intent_type == IntentType.OPEN_APP
+        assert intent.slots["app_name"] == "calculator"
+    
+    def test_asr_variation_youtube_cyrillic(self, nlu):
+        """Tests various YouTube spellings from ASR."""
+        for variant in ["ютуб", "youtube", "ютюб"]:
+            intent = nlu.parse(f"відкрий {variant}")
+            assert intent.intent_type == IntentType.OPEN_URL
+            assert "youtube" in intent.slots["url"]
     
     # ============================================
     # Pattern Management Tests

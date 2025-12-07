@@ -7,10 +7,11 @@ dataclasses-json>=0.6.3
 typing-extensions>=4.9.0
 
 # Voice Processing
-vosk>=0.3.45
+faster-whisper>=1.0.0
 pvporcupine>=3.0.0
-sounddevice>=0.4.6
+pyaudio>=0.2.14
 numpy>=1.26.0
+pyttsx3>=2.90
 
 # NLU (Deterministic baseline)
 # No external deps needed for regex-based NLU
@@ -37,7 +38,6 @@ isort>=5.13.2
 flake8>=7.0.0
 
 # Research / Benchmarking (optional)
-# whisper>=1.0.0  # For experimental comparison
-# llama-cpp-python>=0.2.0  # For LLM experiments
+# vosk>=0.3.45  # Alternative ASR (Ukrainian-only, smaller models)
 matplotlib>=3.8.2
 pandas>=2.1.4
