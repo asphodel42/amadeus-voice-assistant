@@ -399,6 +399,7 @@ class Planner:
         # Map IntentType to handler methods
         self._intent_handlers: Dict[IntentType, callable] = {
             IntentType.OPEN_APP: self._plan_open_app,
+            IntentType.OPEN_FILE: self._plan_open_file,
             IntentType.OPEN_URL: self._plan_open_url,
             IntentType.WEB_SEARCH: self._plan_web_search,
             IntentType.LIST_DIR: self._plan_list_dir,
@@ -407,6 +408,8 @@ class Planner:
             IntentType.WRITE_FILE: self._plan_write_file,
             IntentType.DELETE_FILE: self._plan_delete_file,
             IntentType.SYSTEM_INFO: self._plan_system_info,
+            IntentType.CONFIRM: self._plan_confirm,
+            IntentType.DENY: self._plan_deny,
             IntentType.UNKNOWN: self._plan_unknown,
         }
 
@@ -619,6 +622,39 @@ class Planner:
 
     def _plan_unknown(self, intent: Intent) -> List[Action]:
         """Handles unknown intent."""
+        return []
+    
+    def _plan_open_file(self, intent: Intent) -> List[Action]:
+        """Plans to open a file with default application."""
+        path = intent.get_slot("path", "")
+        
+        return [
+            Action(
+                tool_name="filesystem",
+                function_name="open_file",
+                args={"path": path},
+                risk=RiskLevel.SAFE,
+                description=f"Open file: {path}",
+                requires_confirmation=False,
+            )
+        ]
+    
+    def _plan_confirm(self, intent: Intent) -> List[Action]:
+        """
+        Handles CONFIRM intent.
+        
+        This is a special case - CONFIRM doesn't create actions,
+        it's handled by the state machine to proceed with pending actions.
+        """
+        return []
+    
+    def _plan_deny(self, intent: Intent) -> List[Action]:
+        """
+        Handles DENY intent.
+        
+        This is a special case - DENY doesn't create actions,
+        it's handled by the state machine to cancel pending actions.
+        """
         return []
 
     def _create_denied_action(self, reason: str) -> Action:

@@ -26,6 +26,7 @@ from amadeus.core.entities import (
     ExecutionStatus,
     Intent,
     IntentType,
+    RiskLevel,
 )
 from amadeus.core.planner import Planner, PlanRenderer
 from amadeus.core.policy import PolicyDecision, PolicyEngine
@@ -146,6 +147,10 @@ class VoicePipeline:
 
         # Session counter
         self._session_counter = 0
+        
+        # Pending plan awaiting confirmation
+        self._pending_plan: Optional[ActionPlan] = None
+        self._pending_request: Optional[CommandRequest] = None
 
     # ============================================
     # Public API
@@ -199,6 +204,37 @@ class VoicePipeline:
                 # Step 4: Respond with voice
                 if result.success:
                     self._speak("Виконано")
+                elif result.error == "CONFIRMATION_REQUIRED":
+                    # Special case: confirmation needed
+                    plan = result.plan
+                    if plan:
+                        risk_text = {
+                            RiskLevel.HIGH: "небезпечна",
+                            RiskLevel.DESTRUCTIVE: "дуже небезпечна",
+                        }.get(plan.max_risk, "потребує підтвердження")
+                        
+                        self._speak(f"Команда {risk_text}. Підтверджуєте виконання?")
+                        
+                        # Wait for confirmation response
+                        logger.info("Waiting for confirmation (yes/no)...")
+                        confirmation_text = self._listen_for_command(timeout_seconds=10.0)
+                        
+                        if confirmation_text:
+                            logger.info(f"Confirmation response: '{confirmation_text}'")
+                            # Process confirmation
+                            confirm_result = self.process_text(confirmation_text)
+                            
+                            if confirm_result.success:
+                                self._speak("Виконано")
+                            else:
+                                self._speak("Скасовано")
+                        else:
+                            logger.info("No confirmation received, timing out")
+                            self._speak("Час вийшов. Команду скасовано.")
+                            # Timeout - cancel the pending action
+                            self.state_machine.transition(StateTransition.TIMEOUT)
+                            self._pending_plan = None
+                            self._pending_request = None
                 elif result.error:
                     self._speak(f"Помилка: {result.error}")
                 else:
@@ -400,6 +436,69 @@ class VoicePipeline:
             intent = self._parse_intent(text)
             self._emit("intent_recognized", {"intent": intent})
             
+            # Handle CONFIRM intent (proceed with pending plan)
+            if intent.intent_type == IntentType.CONFIRM:
+                if self._pending_plan is not None and self.state_machine.is_reviewing:
+                    logger.info("User confirmed pending action")
+                    self.state_machine.transition(StateTransition.CONFIRM)
+                    
+                    # Execute the pending plan
+                    results = self._execute_plan(self._pending_plan)
+                    self._emit("execution_complete", {"results": results})
+                    self._log_audit("execution_complete", request=self._pending_request, plan=self._pending_plan)
+                    
+                    # Clear pending
+                    plan = self._pending_plan
+                    self._pending_plan = None
+                    self._pending_request = None
+                    
+                    # Return to IDLE
+                    self.state_machine.transition(StateTransition.COMPLETE)
+                    
+                    all_success = all(r.is_success for r in results)
+                    return PipelineResult(
+                        success=all_success,
+                        request=request,
+                        intent=intent,
+                        plan=plan,
+                        results=results,
+                        duration_ms=self._calc_duration(start_time),
+                    )
+                else:
+                    return PipelineResult(
+                        success=False,
+                        request=request,
+                        intent=intent,
+                        error="No pending action to confirm",
+                        duration_ms=self._calc_duration(start_time),
+                    )
+            
+            # Handle DENY intent (cancel pending plan)
+            if intent.intent_type == IntentType.DENY:
+                if self._pending_plan is not None and self.state_machine.is_reviewing:
+                    logger.info("User denied pending action")
+                    self.state_machine.transition(StateTransition.DENY)
+                    
+                    # Clear pending
+                    self._pending_plan = None
+                    self._pending_request = None
+                    
+                    return PipelineResult(
+                        success=True,
+                        request=request,
+                        intent=intent,
+                        error="Action cancelled by user",
+                        duration_ms=self._calc_duration(start_time),
+                    )
+                else:
+                    return PipelineResult(
+                        success=False,
+                        request=request,
+                        intent=intent,
+                        error="No pending action to cancel",
+                        duration_ms=self._calc_duration(start_time),
+                    )
+            
             if intent.is_unknown:
                 return PipelineResult(
                     success=False,
@@ -449,13 +548,40 @@ class VoicePipeline:
             
             # Confirmation (if needed)
             if decision.requires_confirmation and not skip_confirmation:
+                # Transition to REVIEWING state
+                self.state_machine.transition(StateTransition.PLAN_READY)
+                
+                # Store pending plan
+                self._pending_plan = plan
+                self._pending_request = request
+                
+                # Emit confirmation needed event
                 self._emit("confirmation_needed", {
                     "plan": plan,
                     "decision": decision,
                 })
-                # In real UI there will be waiting for response
-                # For tests — automatically confirm
+                
                 logger.info(f"Confirmation required for plan: {plan.plan_id}")
+                logger.info(f"Risk level: {plan.max_risk.name}")
+                
+                # For voice interface, we need to wait for user response
+                # Return a special result indicating confirmation is needed
+                return PipelineResult(
+                    success=False,
+                    request=request,
+                    intent=intent,
+                    plan=plan,
+                    decision=decision,
+                    error="CONFIRMATION_REQUIRED",  # Special marker
+                    duration_ms=self._calc_duration(start_time),
+                )
+            
+            # Auto-confirm safe operations or if confirmation is skipped
+            if decision.requires_confirmation:
+                self.state_machine.transition(StateTransition.PLAN_READY)
+                self.state_machine.transition(StateTransition.CONFIRM)
+            else:
+                self.state_machine.transition(StateTransition.PLAN_SAFE)
             
             # Execution
             if not plan.dry_run:

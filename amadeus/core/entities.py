@@ -49,6 +49,7 @@ class IntentType(Enum):
     """Supported intent types for version 0.1.0 (MVP)."""
     OPEN_APP = "open_app"
     OPEN_URL = "open_url"
+    OPEN_FILE = "open_file"
     WEB_SEARCH = "web_search"
     LIST_DIR = "list_dir"
     READ_FILE = "read_file"
@@ -56,6 +57,8 @@ class IntentType(Enum):
     WRITE_FILE = "write_file"
     DELETE_FILE = "delete_file"
     SYSTEM_INFO = "system_info"
+    CONFIRM = "confirm"
+    DENY = "deny"
     UNKNOWN = "unknown"
 
 

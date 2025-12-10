@@ -320,6 +320,80 @@ class NLUPattern:
 
 DEFAULT_PATTERNS: List[NLUPattern] = [
     # ============================================
+    # CONFIRM - підтвердження команд (HIGHEST PRIORITY!)
+    # ============================================
+    NLUPattern(
+        intent_type=IntentType.CONFIRM,
+        patterns=[
+            # Ukrainian
+            r"^(?:так|ага|угу|авжеж|звісно|звичайно)\.?!?$",
+            r"^(?:згоден|згодна|згідний|згідна|погоджуюсь)\.?!?$",
+            r"^(?:підтверджую|підтверджуй|виконай|виконати|давай|роби)\.?!?$",
+            # English
+            r"^(?:yes|yeah|yep|sure|ok|okay|fine|confirm|do it|go ahead)\.?!?$",
+            # Short forms
+            r"^(?:y|k)$",
+        ],
+        priority=100,  # Highest priority to catch confirmations first
+        examples=[
+            "так",
+            "yes",
+            "окей",
+            "підтверджую",
+            "виконай",
+            "давай",
+        ],
+    ),
+    
+    # ============================================
+    # DENY - відмова від команд (HIGHEST PRIORITY!)
+    # ============================================
+    NLUPattern(
+        intent_type=IntentType.DENY,
+        patterns=[
+            # Ukrainian
+            r"^(?:ні|не|ніт|нє|неа|нічого|нізащо)\.?!?$",
+            r"^(?:скасуй|скасувати|відміна|відмінити|стоп|зупини)\.?!?$",
+            r"^(?:не треба|не потрібно|не роби|не виконуй)\.?!?$",
+            # English
+            r"^(?:no|nope|nah|cancel|stop|abort|never mind|forget it)\.?!?$",
+            # Short forms
+            r"^(?:n)$",
+        ],
+        priority=100,  # Highest priority to catch denials first
+        examples=[
+            "ні",
+            "no",
+            "скасуй",
+            "відміна",
+            "стоп",
+            "не треба",
+        ],
+    ),
+    
+    # ============================================
+    # OPEN_FILE - відкриття файлів (з розширенням)
+    # ============================================
+    NLUPattern(
+        intent_type=IntentType.OPEN_FILE,
+        patterns=[
+            # Explicit "open file X"
+            r"^(?:open|відкрий|відкри|відкрив)\s+файл\s+(?P<path>[\w\s\-а-яіїєґ\.]+)$",
+            # "open X.ext" - must have file extension
+            r"^(?:open|відкрий|відкри|відкрив)\s+(?P<path>[\w\s\-а-яіїєґ]+\.\w{2,4})$",
+            # Ukrainian with extension
+            r"^(?:покажи|відкрити)\s+(?P<path>[\w\s\-а-яіїєґ]+\.\w{2,4})$",
+        ],
+        priority=20,  # Higher than OPEN_APP to catch files first
+        examples=[
+            "відкрий файл test.txt",
+            "відкрий notes.pdf",
+            "open document.docx",
+            "покажи readme.md",
+        ],
+    ),
+    
+    # ============================================
     # OPEN_APP - відкриття програм
     # ============================================
     NLUPattern(
@@ -781,8 +855,11 @@ class DeterministicNLU:
         
         path = path.strip()
         
+        # Fix ASR errors: "крапка txt" -> ".txt"
+        path = self._fix_file_extension(path)
+        
         # Remove trailing period (from ASR output)
-        if path.endswith("."):
+        if path.endswith(".") and not path.endswith(".."):
             path = path[:-1].strip()
         
         # Remove quotes «» (from ASR output)
@@ -799,6 +876,9 @@ class DeterministicNLU:
             # Check if it looks like a file (has extension)
             if "." in path:
                 path = f"~/Documents/{path}"
+            # If no extension at all, add .txt and put in Documents
+            else:
+                path = f"~/Documents/{path}.txt"
         
         # Expand ~ to home directory
         if path.startswith("~"):
@@ -806,6 +886,45 @@ class DeterministicNLU:
         
         # Normalize path separators
         path = path.replace("\\", "/")
+        return path
+    
+    def _fix_file_extension(self, path: str) -> str:
+        """
+        Fix file extension from ASR output.
+        
+        ASR often transcribes "file.txt" as "file крапка txt"
+        This function corrects such errors.
+        
+        Examples:
+            "test крапка txt" -> "test.txt"
+            "notes крапка doc" -> "notes.docx"
+            "файл крапка текст" -> "файл.txt"
+        """
+        # Replace "крапка <extension>" with ".<extension>"
+        path = re.sub(r"\s+крапка\s+(\w+)", r".\1", path, flags=re.IGNORECASE)
+        
+        # Map common ASR variations to proper extensions
+        extension_map = {
+            ".doc": ".docx",
+            ".текст": ".txt",
+            ".текста": ".txt",
+            ".тексті": ".txt",
+            ".доці": ".docx",
+            ".док": ".docx",
+            ".пдф": ".pdf",
+            ".піді еф": ".pdf",
+            ".ексель": ".xlsx",
+            ".ексел": ".xlsx",
+            ".повер поінт": ".pptx",
+            ".джейсон": ".json",
+            ".сієс віі": ".csv",
+        }
+        
+        for wrong_ext, correct_ext in extension_map.items():
+            if path.lower().endswith(wrong_ext):
+                path = path[:-len(wrong_ext)] + correct_ext
+                break
+        
         return path
 
     def _process_url(self, url: str) -> str:
@@ -856,6 +975,20 @@ def test_nlu_patterns() -> None:
     nlu = DeterministicNLU()
     
     test_cases = [
+        # Confirmation commands
+        ("так", IntentType.CONFIRM, {}),
+        ("yes", IntentType.CONFIRM, {}),
+        ("підтверджую", IntentType.CONFIRM, {}),
+        ("давай", IntentType.CONFIRM, {}),
+        ("ok", IntentType.CONFIRM, {}),
+        
+        # Denial commands
+        ("ні", IntentType.DENY, {}),
+        ("no", IntentType.DENY, {}),
+        ("скасуй", IntentType.DENY, {}),
+        ("стоп", IntentType.DENY, {}),
+        ("не треба", IntentType.DENY, {}),
+        
         # English commands
         ("open calculator", IntentType.OPEN_APP, {"app_name": "calculator"}),
         ("launch notepad", IntentType.OPEN_APP, {"app_name": "notepad"}),
@@ -867,6 +1000,11 @@ def test_nlu_patterns() -> None:
         ("open youtube", IntentType.OPEN_URL, {"url": "https://youtube.com"}),
         ("open github", IntentType.OPEN_URL, {"url": "https://github.com"}),
         ("open telegram", IntentType.OPEN_URL, {"url": "https://web.telegram.org"}),
+        
+        # Open files (with extension)
+        ("open test.txt", IntentType.OPEN_FILE, {}),
+        ("відкрий файл notes.pdf", IntentType.OPEN_FILE, {}),
+        ("відкрий readme.md", IntentType.OPEN_FILE, {}),
         
         # Ukrainian commands
         ("відкрий калькулятор", IntentType.OPEN_APP, {"app_name": "calculator"}),

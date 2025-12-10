@@ -429,7 +429,14 @@ class WindowsAdapter(BaseOSAdapter):
         return sorted(result, key=lambda x: (x["type"] == "file", x["name"].lower()))
 
     def read_file(self, path: str, max_bytes: int = 10240) -> str:
-        """Read file contents."""
+        """
+        Read file contents with intelligent encoding detection.
+        
+        Tries multiple encodings in order:
+        1. UTF-8 (modern standard)
+        2. CP1251 (Cyrillic Windows)
+        3. Latin-1 (fallback, never fails)
+        """
         if not self.is_path_allowed(path, "read"):
             raise PermissionError(f"Access denied to path: {path}")
         
@@ -441,14 +448,38 @@ class WindowsAdapter(BaseOSAdapter):
         
         # Check file size
         size = target.stat().st_size
-        if size > max_bytes:
-            # Read only the beginning of the file
-            with open(target, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read(max_bytes)
-            return content + f"\n\n... [Truncated. File size: {size} bytes, shown: {max_bytes} bytes]"
         
-        with open(target, "r", encoding="utf-8", errors="replace") as f:
-            return f.read()
+        # Try different encodings
+        encodings = ["utf-8", "cp1251", "latin-1"]
+        content = None
+        used_encoding = None
+        
+        for encoding in encodings:
+            try:
+                with open(target, "r", encoding=encoding) as f:
+                    if size > max_bytes:
+                        content = f.read(max_bytes)
+                        content += f"\n\n... [Truncated. File size: {size} bytes, shown: {max_bytes} bytes]"
+                    else:
+                        content = f.read()
+                used_encoding = encoding
+                break
+            except (UnicodeDecodeError, LookupError):
+                continue
+        
+        if content is None:
+            # Last resort: binary mode with replacement
+            with open(target, "rb") as f:
+                raw = f.read(max_bytes if size > max_bytes else size)
+            content = raw.decode("utf-8", errors="replace")
+            used_encoding = "utf-8 (with errors replaced)"
+        
+        # Log which encoding was used for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Read file '{path}' using {used_encoding} encoding")
+        
+        return content
 
     def create_file(self, path: str, content: str = "") -> bool:
         """Create a new file. If file exists, adds a number suffix."""
@@ -564,6 +595,34 @@ class WindowsAdapter(BaseOSAdapter):
             return True
         except Exception as e:
             raise RuntimeError(f"Failed to open URL: {e}")
+    
+    def open_file(self, path: str) -> bool:
+        """
+        Open file with default application.
+        
+        Uses Windows 'start' command to open files with their associated programs.
+        Properly handles file paths with spaces and special characters.
+        """
+        target = Path(path).expanduser().resolve()
+        
+        if not target.exists():
+            raise FileNotFoundError(f"File not found: {path}")
+        
+        if not target.is_file():
+            raise IsADirectoryError(f"Path is a directory, not a file: {path}")
+        
+        try:
+            # Windows: use start command with proper quoting
+            # The empty string "" after start is the window title
+            subprocess.Popen(
+                ["cmd", "/c", "start", "", str(target)],
+                shell=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except Exception as e:
+            raise RuntimeError(f"Failed to open file: {e}")
 
     # ============================================
     # System Info
