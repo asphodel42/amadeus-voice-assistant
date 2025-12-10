@@ -124,6 +124,7 @@ class VoicePipeline:
         config: Optional[PipelineConfig] = None,
         planner: Optional[Planner] = None,
         policy_engine: Optional[PolicyEngine] = None,
+        audit: Optional[Any] = None,
     ) -> None:
         self.config = config or PipelineConfig()
         self.state_machine = ConfirmationStateMachine()
@@ -136,7 +137,7 @@ class VoicePipeline:
         # Adapters (initialized lazily)
         self._nlu = None
         self._os_adapter = None
-        self._audit = None
+        self._audit = audit  # Use provided audit adapter
         
         # Voice adapters (initialized lazily)
         self._tts = None
@@ -176,7 +177,7 @@ class VoicePipeline:
         
         logger.info("Amadeus voice assistant started")
         logger.info("Press Ctrl+C for exit")
-        self._speak(f"Амадеус готова. Скажіть {self.config.wake_word} щоб почати.")
+        self._speak(f"Привіт! Я Амадеус. Готова вам допомогти. Скажіть {self.config.wake_word} щоб почати.")
         
         try:
             while self._voice_running:
@@ -185,7 +186,7 @@ class VoicePipeline:
                     logger.info(f"Waiting for wake word: '{self.config.wake_word}'...")
                     if not self._wait_for_wake_word():
                         continue
-                    self._speak("Слухаю")
+                    self._speak("Так, слухаю вас")
                 
                 # Step 2: Record and recognize the command
                 logger.info("Record command...")
@@ -193,7 +194,7 @@ class VoicePipeline:
                 
                 if not text or len(text.strip()) == 0:
                     logger.info("Could not recognize the command")
-                    self._speak("Вибачте, не розчула. Спробуйте ще раз.")
+                    self._speak("Вибачте, я вас не почула. Можете повторити, будь ласка?")
                     continue
                 
                 logger.info(f"Recognized: '{text}'")
@@ -203,7 +204,7 @@ class VoicePipeline:
                 
                 # Step 4: Respond with voice
                 if result.success:
-                    self._speak("Виконано")
+                    self._speak("Зрозуміла. Виконую")
                 elif result.error == "CONFIRMATION_REQUIRED":
                     # Special case: confirmation needed
                     plan = result.plan
@@ -213,7 +214,7 @@ class VoicePipeline:
                             RiskLevel.DESTRUCTIVE: "дуже небезпечна",
                         }.get(plan.max_risk, "потребує підтвердження")
                         
-                        self._speak(f"Команда {risk_text}. Підтверджуєте виконання?")
+                        self._speak(f"Увага! Команда {risk_text}. Ви підтверджуєте виконання?")
                         
                         # Wait for confirmation response
                         logger.info("Waiting for confirmation (yes/no)...")
@@ -225,12 +226,12 @@ class VoicePipeline:
                             confirm_result = self.process_text(confirmation_text)
                             
                             if confirm_result.success:
-                                self._speak("Виконано")
+                                self._speak("Добре. Виконано")
                             else:
-                                self._speak("Скасовано")
+                                self._speak("Гаразд. Скасовано")
                         else:
                             logger.info("No confirmation received, timing out")
-                            self._speak("Час вийшов. Команду скасовано.")
+                            self._speak("Час вийшов. Команду скасовано")
                             # Timeout - cancel the pending action
                             self.state_machine.transition(StateTransition.TIMEOUT)
                             self._pending_plan = None
@@ -238,7 +239,7 @@ class VoicePipeline:
                 elif result.error:
                     self._speak(f"Помилка: {result.error}")
                 else:
-                    self._speak("Не вдалося виконати команду")
+                    self._speak("На жаль, не вдалося виконати команду")
                 
         except KeyboardInterrupt:
             logger.info("Voice loop was interrupted by user (Ctrl+C)")
@@ -263,6 +264,34 @@ class VoicePipeline:
             from amadeus.adapters.voice.tts import Pyttsx3Adapter, SilentTTSAdapter
             if self.config.tts_enabled:
                 self._tts = Pyttsx3Adapter(rate=self.config.voice_rate)
+                
+                # Try to select a female voice
+                voices = self._tts.get_available_voices()
+                female_voice = None
+                
+                # Try to find female voice (usually contains "female", "woman", "helena", "zira", etc.)
+                for voice in voices:
+                    voice_name = voice.get("name", "").lower()
+                    voice_id = voice.get("id", "")
+                    
+                    # Look for female indicators in the voice name
+                    if any(indicator in voice_name for indicator in 
+                           ["female", "woman", "zira", "helena", "katya", "kateryna", "woman", "жіночий"]):
+                        female_voice = voice_id
+                        logger.info(f"Selected female voice: {voice.get('name')}")
+                        break
+                
+                # If no female voice found explicitly, try to use the second voice (often female)
+                if not female_voice and len(voices) > 1:
+                    female_voice = voices[1].get("id")
+                    logger.info(f"Using alternate voice: {voices[1].get('name')}")
+                
+                # Set the female voice if found
+                if female_voice:
+                    self._tts.set_voice(female_voice)
+                else:
+                    logger.warning("Could not find a female voice, using default")
+                
             else:
                 self._tts = SilentTTSAdapter()
             logger.info("TTS Initialized")

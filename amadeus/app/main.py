@@ -12,6 +12,7 @@ import sys
 from typing import Optional
 
 from amadeus.app.pipeline import VoicePipeline, PipelineConfig
+from amadeus.adapters.persistence.audit import SQLiteAuditAdapter
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -214,6 +215,16 @@ def main(args: Optional[list] = None) -> int:
     # Sets up logging
     setup_logging(parsed.verbose)
 
+    # Initialize audit database
+    audit_db_path = "~/.amadeus/audit.db"
+    audit = SQLiteAuditAdapter(db_path=audit_db_path, create_if_missing=True)
+    
+    if parsed.verbose:
+        print(f"Audit database: {audit.db_path}")
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Audit logging initialized: {audit.db_path}")
+
     # Handle "auto" language as None
     language = parsed.language if parsed.language != "auto" else None
 
@@ -226,7 +237,7 @@ def main(args: Optional[list] = None) -> int:
         whisper_language=language,
         tts_enabled=not parsed.no_tts,
     )
-    pipeline = VoicePipeline(config=config)
+    pipeline = VoicePipeline(config=config, audit=audit)
 
     # Execute based on mode
     if parsed.command:
