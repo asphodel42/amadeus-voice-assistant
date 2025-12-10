@@ -177,7 +177,10 @@ class VoicePipeline:
         
         logger.info("Amadeus voice assistant started")
         logger.info("Press Ctrl+C for exit")
-        self._speak(f"Привіт! Я Амадеус. Готова вам допомогти. Скажіть {self.config.wake_word} щоб почати.")
+        self._speak_emotional(
+            f"Привіт! Я Амадеус. <pause> Готова вам допомогти. Скажіть {self.config.wake_word} щоб почати.",
+            emotion="friendly"
+        )
         
         try:
             while self._voice_running:
@@ -186,7 +189,7 @@ class VoicePipeline:
                     logger.info(f"Waiting for wake word: '{self.config.wake_word}'...")
                     if not self._wait_for_wake_word():
                         continue
-                    self._speak("Так, слухаю вас")
+                    self._speak_emotional("Так, слухаю вас", emotion="friendly")
                 
                 # Step 2: Record and recognize the command
                 logger.info("Record command...")
@@ -194,7 +197,10 @@ class VoicePipeline:
                 
                 if not text or len(text.strip()) == 0:
                     logger.info("Could not recognize the command")
-                    self._speak("Вибачте, я вас не почула. Можете повторити, будь ласка?")
+                    self._speak_emotional(
+                        "Вибачте, я вас не почула. <pause> Можете повторити, будь ласка?",
+                        emotion="apologetic"
+                    )
                     continue
                 
                 logger.info(f"Recognized: '{text}'")
@@ -204,7 +210,7 @@ class VoicePipeline:
                 
                 # Step 4: Respond with voice
                 if result.success:
-                    self._speak("Зрозуміла. Виконую")
+                    self._speak_emotional("Зрозуміла. <pause> Виконую", emotion="confident")
                 elif result.error == "CONFIRMATION_REQUIRED":
                     # Special case: confirmation needed
                     plan = result.plan
@@ -214,7 +220,10 @@ class VoicePipeline:
                             RiskLevel.DESTRUCTIVE: "дуже небезпечна",
                         }.get(plan.max_risk, "потребує підтвердження")
                         
-                        self._speak(f"Увага! Команда {risk_text}. Ви підтверджуєте виконання?")
+                        self._speak_emotional(
+                            f"Увага! <break> Команда {risk_text}. Ви підтверджуєте виконання?",
+                            emotion="alert"
+                        )
                         
                         # Wait for confirmation response
                         logger.info("Waiting for confirmation (yes/no)...")
@@ -226,26 +235,26 @@ class VoicePipeline:
                             confirm_result = self.process_text(confirmation_text)
                             
                             if confirm_result.success:
-                                self._speak("Добре. Виконано")
+                                self._speak_emotional("Добре. <pause> Виконано", emotion="happy")
                             else:
-                                self._speak("Гаразд. Скасовано")
+                                self._speak_emotional("Гаразд. <pause> Скасовано", emotion="neutral")
                         else:
                             logger.info("No confirmation received, timing out")
-                            self._speak("Час вийшов. Команду скасовано")
+                            self._speak_emotional("Час вийшов. <pause> Команду скасовано", emotion="concerned")
                             # Timeout - cancel the pending action
                             self.state_machine.transition(StateTransition.TIMEOUT)
                             self._pending_plan = None
                             self._pending_request = None
                 elif result.error:
-                    self._speak(f"Помилка: {result.error}")
+                    self._speak_emotional(f"Помилка: <pause> {result.error}", emotion="concerned")
                 else:
-                    self._speak("На жаль, не вдалося виконати команду")
+                    self._speak_emotional("На жаль, не вдалося виконати команду", emotion="apologetic")
                 
         except KeyboardInterrupt:
             logger.info("Voice loop was interrupted by user (Ctrl+C)")
         except Exception as e:
             logger.exception(f"Voice loop error: {e}")
-            self._speak("Сталася критична помилка")
+            self._speak_emotional("Сталася критична помилка", emotion="concerned")
         finally:
             self._cleanup_voice_adapters()
             logger.info("Amadeus voice assistant stopped")
@@ -421,10 +430,41 @@ class VoicePipeline:
             return ""
     
     def _speak(self, text: str) -> None:
-        """Speaks text using TTS."""
+        """Speaks text using TTS with neutral emotion."""
+        self._speak_emotional(text, emotion="neutral")
+    
+    def _speak_emotional(self, text: str, emotion: str = "neutral") -> None:
+        """
+        Speaks text using TTS with specific emotion.
+        
+        Args:
+            text: Text to speak (supports <pause>, <break> markup)
+            emotion: Emotion type (neutral, happy, excited, concerned, 
+                     apologetic, confident, friendly, alert)
+        """
         if self._tts and self.config.tts_enabled:
             try:
-                self._tts.speak(text)
+                # Check if TTS adapter supports emotional speech
+                if hasattr(self._tts, 'speak_with_emotion'):
+                    from amadeus.adapters.voice.tts import EmotionType
+                    
+                    # Map string to EmotionType enum
+                    emotion_map = {
+                        "neutral": EmotionType.NEUTRAL,
+                        "happy": EmotionType.HAPPY,
+                        "excited": EmotionType.EXCITED,
+                        "concerned": EmotionType.CONCERNED,
+                        "apologetic": EmotionType.APOLOGETIC,
+                        "confident": EmotionType.CONFIDENT,
+                        "friendly": EmotionType.FRIENDLY,
+                        "alert": EmotionType.ALERT,
+                    }
+                    
+                    emotion_type = emotion_map.get(emotion.lower(), EmotionType.NEUTRAL)
+                    self._tts.speak_with_emotion(text, emotion_type)
+                else:
+                    # Fallback to regular speak if emotion not supported
+                    self._tts.speak(text)
             except Exception as e:
                 logger.error(f"Error TTS: {e}")
 
