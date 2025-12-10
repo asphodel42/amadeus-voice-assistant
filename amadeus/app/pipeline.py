@@ -505,6 +505,19 @@ class VoicePipeline:
             intent = self._parse_intent(text)
             self._emit("intent_recognized", {"intent": intent})
             
+            # Log NLU result
+            self._log_audit(
+                "intent_recognized",
+                request=request,
+                plan=None,
+                metadata={
+                    "intent_type": intent.intent_type.value,
+                    "confidence": intent.confidence,
+                    "slots": intent.slots,
+                    "is_unknown": intent.is_unknown,
+                }
+            )
+            
             # Handle CONFIRM intent (proceed with pending plan)
             if intent.intent_type == IntentType.CONFIRM:
                 if self._pending_plan is not None and self.state_machine.is_reviewing:
@@ -589,6 +602,19 @@ class VoicePipeline:
             )
             self._emit("plan_ready", {"plan": plan})
             
+            # Log plan creation
+            self._log_audit(
+                "plan_created",
+                request=request,
+                plan=plan,
+                metadata={
+                    "action_count": len(plan.actions),
+                    "max_risk": plan.max_risk.name,
+                    "requires_confirmation": plan.requires_confirmation,
+                    "dry_run": plan.dry_run,
+                }
+            )
+            
             if plan.is_empty:
                 return PipelineResult(
                     success=False,
@@ -623,6 +649,17 @@ class VoicePipeline:
                 # Store pending plan
                 self._pending_plan = plan
                 self._pending_request = request
+                
+                # Log confirmation request
+                self._log_audit(
+                    "confirmation_requested",
+                    request=request,
+                    plan=plan,
+                    metadata={
+                        "risk_level": plan.max_risk.name,
+                        "reason": decision.reason,
+                    }
+                )
                 
                 # Emit confirmation needed event
                 self._emit("confirmation_needed", {
@@ -772,8 +809,17 @@ class VoicePipeline:
         event_type: str,
         request: Optional[CommandRequest] = None,
         plan: Optional[ActionPlan] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Logs an event to the audit log."""
+        """
+        Logs an event to the audit log.
+        
+        Args:
+            event_type: Type of event (command_received, intent_recognized, etc.)
+            request: Command request (if applicable)
+            plan: Action plan (if applicable)
+            metadata: Additional metadata for the event
+        """
         if not self.config.log_all_events:
             return
         
@@ -790,10 +836,12 @@ class VoicePipeline:
             actor="user",
             command_request=request,
             plan=plan,
+            metadata=metadata or {},
         )
         
         try:
             self._audit.append_event(event)
+            logger.debug(f"Logged audit event: {event_type}")
         except Exception as e:
             logger.error(f"Failed to log audit event: {e}")
 

@@ -407,3 +407,189 @@ class SQLiteAuditAdapter:
         """Compute SHA-256 hash."""
         content = "|".join(str(arg) for arg in args)
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    # ============================================
+    # Analytics Methods
+    # ============================================
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive statistics about the audit log.
+        
+        Returns:
+            Dictionary with various statistics
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Total events
+            cursor.execute("SELECT COUNT(*) as total FROM audit_events")
+            total_events = cursor.fetchone()["total"]
+            
+            # Events by type
+            cursor.execute("""
+                SELECT event_type, COUNT(*) as count 
+                FROM audit_events 
+                GROUP BY event_type 
+                ORDER BY count DESC
+            """)
+            events_by_type = {row["event_type"]: row["count"] for row in cursor.fetchall()}
+            
+            # Events by actor
+            cursor.execute("""
+                SELECT actor, COUNT(*) as count 
+                FROM audit_events 
+                GROUP BY actor 
+                ORDER BY count DESC
+            """)
+            events_by_actor = {row["actor"]: row["count"] for row in cursor.fetchall()}
+            
+            # First and last event timestamps
+            cursor.execute("""
+                SELECT MIN(timestamp) as first, MAX(timestamp) as last 
+                FROM audit_events
+            """)
+            time_range = cursor.fetchone()
+            
+            # Events per day (last 7 days)
+            cursor.execute("""
+                SELECT DATE(timestamp) as date, COUNT(*) as count 
+                FROM audit_events 
+                WHERE timestamp >= datetime('now', '-7 days')
+                GROUP BY DATE(timestamp)
+                ORDER BY date DESC
+            """)
+            events_per_day = {row["date"]: row["count"] for row in cursor.fetchall()}
+            
+        return {
+            "total_events": total_events,
+            "events_by_type": events_by_type,
+            "events_by_actor": events_by_actor,
+            "first_event": time_range["first"] if time_range else None,
+            "last_event": time_range["last"] if time_range else None,
+            "events_per_day": events_per_day,
+        }
+
+    def get_voice_interactions(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get voice interactions with NLU results.
+        
+        Returns:
+            List of voice interactions with recognized intents
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT event_id, timestamp, data
+                FROM audit_events
+                WHERE event_type IN ('command_received', 'nlu_parsed', 'intent_recognized')
+                ORDER BY timestamp DESC
+                LIMIT ? OFFSET ?
+            """, (limit, offset))
+            rows = cursor.fetchall()
+        
+        interactions = []
+        for row in rows:
+            data = json.loads(row["data"])
+            interactions.append({
+                "event_id": row["event_id"],
+                "timestamp": row["timestamp"],
+                "event_type": data.get("event_type"),
+                "raw_text": data.get("command_request", {}).get("raw_text"),
+                "intent_type": data.get("plan", {}).get("intent_type"),
+                "metadata": data.get("metadata", {}),
+            })
+        
+        return interactions
+
+    def get_command_history(
+        self,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get recent command history with execution status.
+        
+        Returns:
+            List of commands with their outcomes
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT event_id, timestamp, event_type, data
+                FROM audit_events
+                WHERE event_type IN ('command_received', 'execution_complete', 'policy_denied')
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (limit * 3,))  # Get more rows to group by command
+            rows = cursor.fetchall()
+        
+        commands = []
+        current_command = None
+        
+        for row in rows:
+            data = json.loads(row["data"])
+            
+            if row["event_type"] == "command_received":
+                if current_command:
+                    commands.append(current_command)
+                
+                current_command = {
+                    "timestamp": row["timestamp"],
+                    "raw_text": data.get("command_request", {}).get("raw_text"),
+                    "status": "pending",
+                }
+            
+            elif row["event_type"] in ("execution_complete", "policy_denied"):
+                if current_command:
+                    current_command["status"] = (
+                        "denied" if row["event_type"] == "policy_denied" 
+                        else "completed"
+                    )
+                    current_command["intent_type"] = data.get("plan", {}).get("intent_type")
+        
+        if current_command:
+            commands.append(current_command)
+        
+        return commands[:limit]
+
+    def search_events(
+        self,
+        search_text: str,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search events by text content.
+        
+        Args:
+            search_text: Text to search for
+            limit: Maximum results
+            
+        Returns:
+            List of matching events
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT event_id, timestamp, event_type, data
+                FROM audit_events
+                WHERE data LIKE ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (f"%{search_text}%", limit))
+            rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            data = json.loads(row["data"])
+            results.append({
+                "event_id": row["event_id"],
+                "timestamp": row["timestamp"],
+                "event_type": row["event_type"],
+                "data": data,
+            })
+        
+        return results
