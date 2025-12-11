@@ -51,7 +51,9 @@ SITE_SHORTCUTS: Dict[str, str] = {
     "твіч": "https://twitch.tv",
     "tiktok": "https://tiktok.com",
     "тікток": "https://tiktok.com",
+    "тикток": "https://tiktok.com",
     "тік ток": "https://tiktok.com",
+    "тик ток": "https://tiktok.com",
     
     # Music
     "spotify": "https://open.spotify.com",
@@ -87,12 +89,14 @@ SITE_SHORTCUTS: Dict[str, str] = {
     "вайбер": "https://viber.com",
     "discord": "https://discord.com",
     "діскорд": "https://discord.com",
+    "дискорд": "https://discord.com",
     "slack": "https://slack.com",
     "слак": "https://slack.com",
     
     # Development
     "github": "https://github.com",
     "гітхаб": "https://github.com",
+    "гитхаб": "https://github.com",
     "гіт хаб": "https://github.com",
     "gitlab": "https://gitlab.com",
     "stackoverflow": "https://stackoverflow.com",

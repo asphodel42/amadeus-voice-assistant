@@ -62,7 +62,7 @@ class PipelineConfig:
     # Voice settings
     wake_word: str = "amadeus"
     whisper_model_size: str = "small"  # tiny, base, small, medium, large-v2, large-v3
-    whisper_language: Optional[str] = "uk"  # "uk" = Ukrainian, None = auto-detect
+    whisper_language: Optional[str] = None  # None = auto-detect, "uk" = Ukrainian, "en" = English
     tts_enabled: bool = True
     voice_rate: int = 180  # words/min for TTS
 
@@ -794,9 +794,11 @@ class VoicePipeline:
             self._nlu = DeterministicNLU()
         
         # Clean up ASR artifacts: remove punctuation that breaks regex patterns
-        # Whisper tends to add commas, periods, etc. based on pauses
+        # Whisper tends to add commas, periods, hyphens etc. based on pauses
         import re
         cleaned_text = re.sub(r'[,;:!?]', '', text)  # Remove common punctuation
+        cleaned_text = re.sub(r'-', ' ', cleaned_text)  # Replace hyphens with spaces
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)  # Collapse multiple spaces
         cleaned_text = cleaned_text.strip()
         
         return self._nlu.parse(cleaned_text)
