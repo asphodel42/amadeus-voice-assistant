@@ -125,6 +125,34 @@ class PyAudioInputAdapter:
                 self._stream = None
                 self._is_streaming = False
     
+    def pause_stream(self) -> None:
+        """
+        Temporarily pauses the audio stream without closing it.
+        Useful when TTS needs to use the audio output.
+        """
+        if self._stream and self._is_streaming:
+            try:
+                self._stream.stop_stream()
+                logger.debug("Audio stream paused")
+            except Exception as e:
+                logger.error(f"Error pausing stream: {e}")
+    
+    def resume_stream(self) -> None:
+        """
+        Resumes a paused audio stream.
+        """
+        if self._stream and not self._stream.is_active():
+            try:
+                self._stream.start_stream()
+                logger.debug("Audio stream resumed")
+            except Exception as e:
+                logger.error(f"Error resuming stream: {e}")
+    
+    @property
+    def is_active(self) -> bool:
+        """Returns True if stream is active."""
+        return self._stream is not None and self._stream.is_active()
+    
     def read_frame(self) -> Optional[bytes]:
         """
         Reads one frame of audio data.

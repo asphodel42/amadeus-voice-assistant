@@ -13,6 +13,7 @@ from typing import Optional
 
 from amadeus.app.pipeline import VoicePipeline, PipelineConfig
 from amadeus.adapters.persistence.audit import SQLiteAuditAdapter
+from amadeus.core.config import get_audit_db_path
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -68,7 +69,7 @@ def run_interactive(pipeline: VoicePipeline) -> None:
         result = pipeline.process_text(command)
         
         if result.success:
-            print(f"✅ Success!")
+            print("Success!")
             if result.plan:
                 print(f"   Intent: {result.intent.intent_type.value}")
                 print(f"   Actions: {len(result.plan.actions)}")
@@ -76,7 +77,7 @@ def run_interactive(pipeline: VoicePipeline) -> None:
                 if r.output:
                     print(f"   Output: {r.output}")
         else:
-            print(f"❌ Failed: {result.error}")
+            print(f"Failed: {result.error}")
             if result.intent and result.intent.is_unknown:
                 print("   Tip: Try rephrasing your command.")
         
@@ -104,7 +105,7 @@ def run_single_command(pipeline: VoicePipeline, command: str, dry_run: bool = Fa
     result = pipeline.process_text(command, dry_run=dry_run)
     
     if result.success:
-        print("✅ Command executed successfully")
+        print("Command executed successfully")
         if result.plan:
             print(f"Intent: {result.intent.intent_type.value}")
         for r in result.results:
@@ -112,7 +113,7 @@ def run_single_command(pipeline: VoicePipeline, command: str, dry_run: bool = Fa
                 print(f"Output: {r.output}")
         return 0
     else:
-        print(f"❌ Command failed: {result.error}")
+        print(f"Command failed: {result.error}")
         return 1
 
 
@@ -215,9 +216,9 @@ def main(args: Optional[list] = None) -> int:
     # Sets up logging
     setup_logging(parsed.verbose)
 
-    # Initialize audit database
-    audit_db_path = "~/.amadeus/audit.db"
-    audit = SQLiteAuditAdapter(db_path=audit_db_path, create_if_missing=True)
+    # Initialize audit database (inside project data folder)
+    audit_db_path = get_audit_db_path()
+    audit = SQLiteAuditAdapter(db_path=str(audit_db_path), create_if_missing=True)
     
     if parsed.verbose:
         print(f"Audit database: {audit.db_path}")

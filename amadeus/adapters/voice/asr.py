@@ -96,7 +96,7 @@ class WhisperASRAdapter(ASRPort):
             compute_type = "int8" if device == "cpu" else "float16"
         
         # Loading model
-        logger.info(f"Завантаження Whisper моделі: {model_size} (device={device}, compute={compute_type})")
+        logger.info(f"Loading Whisper model: {model_size} (device={device}, compute={compute_type})")
         
         self.model = WhisperModel(
             model_size,
@@ -108,7 +108,7 @@ class WhisperASRAdapter(ASRPort):
         self._audio_buffer: List[bytes] = []
         self._partial_result = ""
         
-        logger.info(f"Whisper ASR ініціалізовано: model={model_size}, language={language or 'auto'}")
+        logger.info(f"Whisper ASR initialized: model={model_size}, language={language or 'auto'}")
     
     def transcribe(self, audio_data: bytes) -> str:
         """
