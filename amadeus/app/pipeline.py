@@ -396,10 +396,14 @@ class VoicePipeline:
             # Whisper-style: start stream, buffer audio, stop stream to get result
             self._asr.start_stream()
             
-            # Record audio until timeout or stop
+            # Record audio until timeout or silence detected (VAD)
             audio_data = self._audio_input.read_seconds(
                 timeout,
-                stop_check=lambda: not self._voice_running
+                stop_check=lambda: not self._voice_running,
+                stop_on_silence=True,  # Enable VAD
+                silence_threshold=0.01,  # Adjust based on mic sensitivity
+                silence_duration=1.2,  # Stop after 1.2 seconds of silence
+                min_speech_duration=0.5,  # Require at least 0.5s of speech
             )
             
             if not audio_data or not self._voice_running:
@@ -789,7 +793,13 @@ class VoicePipeline:
             from amadeus.adapters.voice.nlu import DeterministicNLU
             self._nlu = DeterministicNLU()
         
-        return self._nlu.parse(text)
+        # Clean up ASR artifacts: remove punctuation that breaks regex patterns
+        # Whisper tends to add commas, periods, etc. based on pauses
+        import re
+        cleaned_text = re.sub(r'[,;:!?]', '', text)  # Remove common punctuation
+        cleaned_text = cleaned_text.strip()
+        
+        return self._nlu.parse(cleaned_text)
 
     def _execute_plan(self, plan: ActionPlan) -> List[ExecutionResult]:
         """Executes the action plan."""
