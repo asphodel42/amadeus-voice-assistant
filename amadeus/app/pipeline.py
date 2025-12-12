@@ -13,6 +13,7 @@ Principles:
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -61,7 +62,7 @@ class PipelineConfig:
     # Voice settings
     wake_word: str = "amadeus"
     whisper_model_size: str = "small"  # tiny, base, small, medium, large-v2, large-v3
-    whisper_language: Optional[str] = "uk"  # "uk" = Ukrainian, None = auto-detect
+    whisper_language: Optional[str] = None  # None = auto-detect, "uk" = Ukrainian, "en" = English
     tts_enabled: bool = True
     voice_rate: int = 180  # words/min for TTS
 
@@ -178,7 +179,7 @@ class VoicePipeline:
         logger.info("Amadeus voice assistant started")
         logger.info("Press Ctrl+C for exit")
         self._speak_emotional(
-            f"Привіт! Я Амадеус. <pause> Готова вам допомогти. Скажіть {self.config.wake_word} щоб почати.",
+            f"Hello! I am Amadeus. <pause> Ready to help you. Say {self.config.wake_word} to begin.",
             emotion="friendly"
         )
         
@@ -189,7 +190,7 @@ class VoicePipeline:
                     logger.info(f"Waiting for wake word: '{self.config.wake_word}'...")
                     if not self._wait_for_wake_word():
                         continue
-                    self._speak_emotional("Так, слухаю вас", emotion="friendly")
+                    self._speak_emotional("Yes, I'm listening", emotion="friendly")
                 
                 # Step 2: Record and recognize the command
                 logger.info("Record command...")
@@ -198,7 +199,7 @@ class VoicePipeline:
                 if not text or len(text.strip()) == 0:
                     logger.info("Could not recognize the command")
                     self._speak_emotional(
-                        "Вибачте, я вас не почула. <pause> Можете повторити, будь ласка?",
+                        "Sorry, I didn't catch that. <pause> Could you repeat please?",
                         emotion="apologetic"
                     )
                     continue
@@ -210,18 +211,18 @@ class VoicePipeline:
                 
                 # Step 4: Respond with voice
                 if result.success:
-                    self._speak_emotional("Зрозуміла. <pause> Виконую", emotion="confident")
+                    self._speak_emotional("Got it. <pause> Done", emotion="confident")
                 elif result.error == "CONFIRMATION_REQUIRED":
                     # Special case: confirmation needed
                     plan = result.plan
                     if plan:
                         risk_text = {
-                            RiskLevel.HIGH: "небезпечна",
-                            RiskLevel.DESTRUCTIVE: "дуже небезпечна",
-                        }.get(plan.max_risk, "потребує підтвердження")
+                            RiskLevel.HIGH: "risky",
+                            RiskLevel.DESTRUCTIVE: "dangerous",
+                        }.get(plan.max_risk, "requires confirmation")
                         
                         self._speak_emotional(
-                            f"Увага! <break> Команда {risk_text}. Ви підтверджуєте виконання?",
+                            f"Warning! <break> This command is {risk_text}. Do you confirm?",
                             emotion="alert"
                         )
                         
@@ -235,26 +236,26 @@ class VoicePipeline:
                             confirm_result = self.process_text(confirmation_text)
                             
                             if confirm_result.success:
-                                self._speak_emotional("Добре. <pause> Виконано", emotion="happy")
+                                self._speak_emotional("Okay. <pause> Done", emotion="happy")
                             else:
-                                self._speak_emotional("Гаразд. <pause> Скасовано", emotion="neutral")
+                                self._speak_emotional("Alright. <pause> Cancelled", emotion="neutral")
                         else:
                             logger.info("No confirmation received, timing out")
-                            self._speak_emotional("Час вийшов. <pause> Команду скасовано", emotion="concerned")
+                            self._speak_emotional("Time's up. <pause> Command cancelled", emotion="concerned")
                             # Timeout - cancel the pending action
                             self.state_machine.transition(StateTransition.TIMEOUT)
                             self._pending_plan = None
                             self._pending_request = None
                 elif result.error:
-                    self._speak_emotional(f"Помилка: <pause> {result.error}", emotion="concerned")
+                    self._speak_emotional(f"Error: <pause> {result.error}", emotion="concerned")
                 else:
-                    self._speak_emotional("На жаль, не вдалося виконати команду", emotion="apologetic")
+                    self._speak_emotional("Sorry, could not execute the command", emotion="apologetic")
                 
         except KeyboardInterrupt:
             logger.info("Voice loop was interrupted by user (Ctrl+C)")
         except Exception as e:
             logger.exception(f"Voice loop error: {e}")
-            self._speak_emotional("Сталася критична помилка", emotion="concerned")
+            self._speak_emotional("A critical error occurred", emotion="concerned")
         finally:
             self._cleanup_voice_adapters()
             logger.info("Amadeus voice assistant stopped")
@@ -270,40 +271,27 @@ class VoicePipeline:
         
         # TTS
         if self._tts is None:
-            from amadeus.adapters.voice.tts import Pyttsx3Adapter, SilentTTSAdapter
+            from amadeus.adapters.voice.tts import PiperTTSAdapter, SilentTTSAdapter, PIPER_AVAILABLE
+            
             if self.config.tts_enabled:
-                self._tts = Pyttsx3Adapter(rate=self.config.voice_rate)
-                
-                # Try to select a female voice
-                voices = self._tts.get_available_voices()
-                female_voice = None
-                
-                # Try to find female voice (usually contains "female", "woman", "helena", "zira", etc.)
-                for voice in voices:
-                    voice_name = voice.get("name", "").lower()
-                    voice_id = voice.get("id", "")
-                    
-                    # Look for female indicators in the voice name
-                    if any(indicator in voice_name for indicator in 
-                           ["female", "woman", "zira", "helena", "katya", "kateryna", "woman", "жіночий"]):
-                        female_voice = voice_id
-                        logger.info(f"Selected female voice: {voice.get('name')}")
-                        break
-                
-                # If no female voice found explicitly, try to use the second voice (often female)
-                if not female_voice and len(voices) > 1:
-                    female_voice = voices[1].get("id")
-                    logger.info(f"Using alternate voice: {voices[1].get('name')}")
-                
-                # Set the female voice if found
-                if female_voice:
-                    self._tts.set_voice(female_voice)
+                if PIPER_AVAILABLE:
+                    try:
+                        # Use Piper TTS with English voice
+                        self._tts = PiperTTSAdapter(
+                            voice="en_US-amy-medium",
+                            models_dir="models/piper",
+                        )
+                        logger.info("TTS initialized: Piper (English voice)")
+                    except Exception as e:
+                        logger.error(f"Failed to initialize Piper TTS: {e}")
+                        logger.warning("Falling back to silent TTS")
+                        self._tts = SilentTTSAdapter()
                 else:
-                    logger.warning("Could not find a female voice, using default")
-                
+                    logger.warning("Piper TTS not available, using silent TTS")
+                    self._tts = SilentTTSAdapter()
             else:
                 self._tts = SilentTTSAdapter()
-            logger.info("TTS Initialized")
+                logger.info("TTS disabled by config")
         
         # ASR
         if self._asr is None:
@@ -408,10 +396,14 @@ class VoicePipeline:
             # Whisper-style: start stream, buffer audio, stop stream to get result
             self._asr.start_stream()
             
-            # Record audio until timeout or stop
+            # Record audio until timeout or silence detected (VAD)
             audio_data = self._audio_input.read_seconds(
                 timeout,
-                stop_check=lambda: not self._voice_running
+                stop_check=lambda: not self._voice_running,
+                stop_on_silence=True,  # Enable VAD
+                silence_threshold=0.01,  # Adjust based on mic sensitivity
+                silence_duration=1.2,  # Stop after 1.2 seconds of silence
+                min_speech_duration=0.5,  # Require at least 0.5s of speech
             )
             
             if not audio_data or not self._voice_running:
@@ -442,31 +434,59 @@ class VoicePipeline:
             emotion: Emotion type (neutral, happy, excited, concerned, 
                      apologetic, confident, friendly, alert)
         """
-        if self._tts and self.config.tts_enabled:
-            try:
-                # Check if TTS adapter supports emotional speech
-                if hasattr(self._tts, 'speak_with_emotion'):
-                    from amadeus.adapters.voice.tts import EmotionType
-                    
-                    # Map string to EmotionType enum
-                    emotion_map = {
-                        "neutral": EmotionType.NEUTRAL,
-                        "happy": EmotionType.HAPPY,
-                        "excited": EmotionType.EXCITED,
-                        "concerned": EmotionType.CONCERNED,
-                        "apologetic": EmotionType.APOLOGETIC,
-                        "confident": EmotionType.CONFIDENT,
-                        "friendly": EmotionType.FRIENDLY,
-                        "alert": EmotionType.ALERT,
-                    }
-                    
-                    emotion_type = emotion_map.get(emotion.lower(), EmotionType.NEUTRAL)
-                    self._tts.speak_with_emotion(text, emotion_type)
-                else:
-                    # Fallback to regular speak if emotion not supported
-                    self._tts.speak(text)
-            except Exception as e:
-                logger.error(f"Error TTS: {e}")
+        if not self.config.tts_enabled:
+            logger.debug(f"TTS disabled, skipping: {text}")
+            return
+        
+        if self._tts is None:
+            logger.warning("TTS not initialized")
+            return
+        
+        # Temporarily pause audio input during TTS to avoid conflicts
+        audio_was_active = False
+        if self._audio_input and hasattr(self._audio_input, 'pause_stream'):
+            audio_was_active = self._audio_input.is_active
+            if audio_was_active:
+                logger.debug("Pausing audio input for TTS")
+                self._audio_input.pause_stream()
+                # Small delay to ensure audio device is released
+                time.sleep(0.1)
+        
+        try:
+            logger.info(f"TTS Speaking ({emotion}): {text}")
+            
+            # Check if TTS adapter supports emotional speech
+            if hasattr(self._tts, 'speak_with_emotion'):
+                from amadeus.adapters.voice.tts import EmotionType
+                
+                # Map string to EmotionType enum
+                emotion_map = {
+                    "neutral": EmotionType.NEUTRAL,
+                    "happy": EmotionType.HAPPY,
+                    "excited": EmotionType.EXCITED,
+                    "concerned": EmotionType.CONCERNED,
+                    "apologetic": EmotionType.APOLOGETIC,
+                    "confident": EmotionType.CONFIDENT,
+                    "friendly": EmotionType.FRIENDLY,
+                    "alert": EmotionType.ALERT,
+                }
+                
+                emotion_type = emotion_map.get(emotion.lower(), EmotionType.NEUTRAL)
+                self._tts.speak_with_emotion(text, emotion_type)
+                logger.info("TTS completed")
+            else:
+                # Fallback to regular speak if emotion not supported
+                self._tts.speak(text)
+                logger.info("TTS completed")
+        except Exception as e:
+            logger.error(f"TTS error: {e}", exc_info=True)
+        finally:
+            # Resume audio input after TTS
+            if audio_was_active and self._audio_input and hasattr(self._audio_input, 'resume_stream'):
+                # Small delay to ensure TTS audio is fully played
+                time.sleep(0.2)
+                logger.debug("Resuming audio input after TTS")
+                self._audio_input.resume_stream()
 
     def process_text(
         self,
@@ -490,6 +510,18 @@ class VoicePipeline:
         start_time = datetime.now(timezone.utc)
         
         try:
+            # Reset if in error state, then transition to LISTENING
+            if self.state_machine.is_error:
+                self.state_machine.transition(StateTransition.RESET)
+            
+            # Simulate push-to-talk: IDLE -> LISTENING
+            if self.state_machine.is_idle:
+                self.state_machine.transition(StateTransition.PUSH_TO_TALK)
+            
+            # Transition to PROCESSING: LISTENING -> PROCESSING
+            if self.state_machine.is_listening:
+                self.state_machine.transition(StateTransition.AUDIO_COMPLETE)
+            
             # Create request
             request = CommandRequest(
                 request_id=self._generate_session_id(),
@@ -582,6 +614,8 @@ class VoicePipeline:
                     )
             
             if intent.is_unknown:
+                # LISTENING -> IDLE (via ERROR)
+                self.state_machine.transition(StateTransition.ERROR)
                 return PipelineResult(
                     success=False,
                     request=request,
@@ -616,6 +650,8 @@ class VoicePipeline:
             )
             
             if plan.is_empty:
+                # LISTENING -> IDLE (via ERROR)
+                self.state_machine.transition(StateTransition.ERROR)
                 return PipelineResult(
                     success=False,
                     request=request,
@@ -630,6 +666,8 @@ class VoicePipeline:
             self._emit("policy_evaluated", {"decision": decision})
             
             if not decision.allowed:
+                # LISTENING -> IDLE (via ERROR)
+                self.state_machine.transition(StateTransition.ERROR)
                 self._log_audit("policy_denied", request=request, plan=plan)
                 return PipelineResult(
                     success=False,
@@ -701,6 +739,12 @@ class VoicePipeline:
             # Check success
             all_success = all(r.is_success for r in results)
             
+            # Transition back to IDLE: EXECUTING -> IDLE
+            if all_success:
+                self.state_machine.transition(StateTransition.COMPLETE)
+            else:
+                self.state_machine.transition(StateTransition.ERROR)
+            
             return PipelineResult(
                 success=all_success,
                 request=request,
@@ -714,6 +758,12 @@ class VoicePipeline:
         except Exception as e:
             logger.exception(f"Pipeline error: {e}")
             self._emit("error", {"error": str(e)})
+            # Try to recover to IDLE
+            try:
+                if not self.state_machine.is_idle:
+                    self.state_machine.transition(StateTransition.ERROR)
+            except Exception:
+                pass  # Ignore transition errors during error handling
             return PipelineResult(
                 success=False,
                 error=str(e),
@@ -780,7 +830,15 @@ class VoicePipeline:
             from amadeus.adapters.voice.nlu import DeterministicNLU
             self._nlu = DeterministicNLU()
         
-        return self._nlu.parse(text)
+        # Clean up ASR artifacts: remove punctuation that breaks regex patterns
+        # Whisper tends to add commas, periods, hyphens etc. based on pauses
+        import re
+        cleaned_text = re.sub(r'[,;:!?]', '', text)  # Remove common punctuation
+        cleaned_text = re.sub(r'-', ' ', cleaned_text)  # Replace hyphens with spaces
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)  # Collapse multiple spaces
+        cleaned_text = cleaned_text.strip()
+        
+        return self._nlu.parse(cleaned_text)
 
     def _execute_plan(self, plan: ActionPlan) -> List[ExecutionResult]:
         """Executes the action plan."""

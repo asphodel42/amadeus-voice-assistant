@@ -34,6 +34,13 @@ logger = logging.getLogger(__name__)
 # Types of model sizes
 ModelSize = Literal["tiny", "base", "small", "medium", "large-v2", "large-v3"]
 
+# Blacklisted languages - if detected, will fallback to English
+# Russian is blacklisted due to political reasons
+LANGUAGE_BLACKLIST = {"ru", "russian"}
+
+# Fallback language when blacklisted language is detected
+FALLBACK_LANGUAGE = "en"
+
 
 class WhisperASRAdapter(ASRPort):
     """
@@ -96,7 +103,7 @@ class WhisperASRAdapter(ASRPort):
             compute_type = "int8" if device == "cpu" else "float16"
         
         # Loading model
-        logger.info(f"Завантаження Whisper моделі: {model_size} (device={device}, compute={compute_type})")
+        logger.info(f"Loading Whisper model: {model_size} (device={device}, compute={compute_type})")
         
         self.model = WhisperModel(
             model_size,
@@ -108,7 +115,7 @@ class WhisperASRAdapter(ASRPort):
         self._audio_buffer: List[bytes] = []
         self._partial_result = ""
         
-        logger.info(f"Whisper ASR ініціалізовано: model={model_size}, language={language or 'auto'}")
+        logger.info(f"Whisper ASR initialized: model={model_size}, language={language or 'auto'}")
     
     def transcribe(self, audio_data: bytes) -> str:
         """
@@ -184,8 +191,32 @@ class WhisperASRAdapter(ASRPort):
             
             text = " ".join(text_parts).strip()
             
+            # Check detected language
+            detected_lang = info.language if hasattr(info, 'language') else "unknown"
+            
+            # If blacklisted language detected, re-transcribe with fallback language
+            if detected_lang in LANGUAGE_BLACKLIST and self.language is None:
+                logger.warning(f"Blacklisted language detected: '{detected_lang}', re-transcribing with '{FALLBACK_LANGUAGE}'")
+                
+                # Re-transcribe with fallback language
+                segments, info = self.model.transcribe(
+                    audio_array,
+                    language=FALLBACK_LANGUAGE,
+                    beam_size=5,
+                    best_of=5,
+                    temperature=0.0,
+                    condition_on_previous_text=False,
+                    vad_filter=False,
+                )
+                
+                text_parts = []
+                for segment in segments:
+                    text_parts.append(segment.text.strip())
+                
+                text = " ".join(text_parts).strip()
+                detected_lang = FALLBACK_LANGUAGE
+            
             if text:
-                detected_lang = info.language if hasattr(info, 'language') else "unknown"
                 logger.info(f"Whisper result: '{text}' (lang={detected_lang})")
             else:
                 logger.debug("Whisper does not recognize any speech")

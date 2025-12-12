@@ -125,6 +125,34 @@ class PyAudioInputAdapter:
                 self._stream = None
                 self._is_streaming = False
     
+    def pause_stream(self) -> None:
+        """
+        Temporarily pauses the audio stream without closing it.
+        Useful when TTS needs to use the audio output.
+        """
+        if self._stream and self._is_streaming:
+            try:
+                self._stream.stop_stream()
+                logger.debug("Audio stream paused")
+            except Exception as e:
+                logger.error(f"Error pausing stream: {e}")
+    
+    def resume_stream(self) -> None:
+        """
+        Resumes a paused audio stream.
+        """
+        if self._stream and not self._stream.is_active():
+            try:
+                self._stream.start_stream()
+                logger.debug("Audio stream resumed")
+            except Exception as e:
+                logger.error(f"Error resuming stream: {e}")
+    
+    @property
+    def is_active(self) -> bool:
+        """Returns True if stream is active."""
+        return self._stream is not None and self._stream.is_active()
+    
     def read_frame(self) -> Optional[bytes]:
         """
         Reads one frame of audio data.
@@ -183,15 +211,23 @@ class PyAudioInputAdapter:
     def read_seconds(
         self, 
         seconds: float,
-        stop_check: Optional[Callable[[], bool]] = None
+        stop_check: Optional[Callable[[], bool]] = None,
+        stop_on_silence: bool = False,
+        silence_threshold: float = 0.01,
+        silence_duration: float = 1.0,
+        min_speech_duration: float = 0.3,
     ) -> bytes:
         """
         Reads audio for specified number of seconds.
         
         Args:
-            seconds: Recording duration in seconds
+            seconds: Maximum recording duration in seconds
             stop_check: Function to check if should stop
                        (returns True if should stop)
+            stop_on_silence: If True, stop recording after silence is detected
+            silence_threshold: RMS threshold below which audio is considered silence (0.0-1.0)
+            silence_duration: Seconds of silence before stopping
+            min_speech_duration: Minimum speech duration before silence detection kicks in
             
         Returns:
             bytes with audio data
@@ -204,7 +240,15 @@ class PyAudioInputAdapter:
         audio_chunks = []
         frames_read = 0
         
-        logger.debug(f"Reading {num_frames} frames ({seconds} sec)")
+        # VAD state
+        silence_frames = 0
+        speech_detected = False
+        frames_per_second = self.sample_rate / self.frame_length
+        silence_frames_threshold = int(silence_duration * frames_per_second)
+        min_speech_frames = int(min_speech_duration * frames_per_second)
+        speech_frames = 0
+        
+        logger.debug(f"Reading up to {num_frames} frames ({seconds} sec), VAD={'on' if stop_on_silence else 'off'}")
         
         while frames_read < num_frames:
             # Check if should stop
@@ -216,10 +260,54 @@ class PyAudioInputAdapter:
             if frame:
                 audio_chunks.append(frame)
                 frames_read += 1
+                
+                # VAD: Check if this frame has speech
+                if stop_on_silence:
+                    rms = self._calculate_rms(frame)
+                    
+                    if rms > silence_threshold:
+                        # Speech detected
+                        speech_detected = True
+                        speech_frames += 1
+                        silence_frames = 0
+                    else:
+                        # Silence
+                        silence_frames += 1
+                    
+                    # Stop if we had enough speech and now have enough silence
+                    if speech_detected and speech_frames >= min_speech_frames:
+                        if silence_frames >= silence_frames_threshold:
+                            logger.debug(f"Silence detected after {speech_frames} speech frames, stopping")
+                            break
             # If frame is None, we just wait (sleep is in read_frame)
         
         audio_data = b"".join(audio_chunks)
         logger.debug(f"Recorded {len(audio_data)} bytes of audio ({frames_read} frames)")
+        
+        return audio_data
+    
+    def _calculate_rms(self, audio_data: bytes) -> float:
+        """
+        Calculate RMS (Root Mean Square) energy of audio frame.
+        
+        Args:
+            audio_data: Raw audio bytes (int16)
+            
+        Returns:
+            Normalized RMS value (0.0 to 1.0)
+        """
+        try:
+            # Unpack bytes to int16 array
+            samples = struct.unpack_from("h" * (len(audio_data) // 2), audio_data)
+            
+            # Calculate RMS
+            sum_squares = sum(s * s for s in samples)
+            rms = (sum_squares / len(samples)) ** 0.5
+            
+            # Normalize to 0-1 range (max int16 is 32767)
+            return rms / 32767.0
+        except Exception:
+            return 0.0
         
         return audio_data
     

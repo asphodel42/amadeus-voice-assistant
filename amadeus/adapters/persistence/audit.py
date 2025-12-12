@@ -394,11 +394,37 @@ class SQLiteAuditAdapter:
         """Convert a database row to an AuditEvent."""
         data = json.loads(row["data"])
         
+        # Restore command_request if present
+        command_request = None
+        if "command_request" in data:
+            from amadeus.core.entities import CommandRequest
+            cr_data = data["command_request"]
+            command_request = CommandRequest(
+                request_id=cr_data.get("request_id", ""),
+                raw_text=cr_data.get("raw_text", ""),
+                source=cr_data.get("source", "unknown"),
+            )
+        
+        # Restore plan if present (simplified)
+        plan = None
+        if "plan" in data:
+            # We don't fully restore the plan, just store basic info in metadata
+            data["metadata"]["plan_info"] = data["plan"]
+        
+        # Restore result if present
+        result = None
+        if "result" in data:
+            # Store result info in metadata
+            data["metadata"]["result_info"] = data["result"]
+        
         return AuditEvent(
             event_id=row["event_id"],
             timestamp=datetime.fromisoformat(row["timestamp"]),
             event_type=row["event_type"],
             actor=row["actor"],
+            command_request=command_request,
+            plan=plan,
+            result=result,
             metadata=data.get("metadata", {}),
             previous_hash=row["previous_hash"],
         )

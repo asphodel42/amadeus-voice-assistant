@@ -35,6 +35,21 @@ try:
 except ImportError:
     PYTTSX3_AVAILABLE = False
 
+try:
+    from piper import PiperVoice
+    from piper.config import SynthesisConfig
+    import wave
+    import io
+    PIPER_AVAILABLE = True
+except ImportError:
+    PIPER_AVAILABLE = False
+
+try:
+    import sounddevice as sd
+    SOUNDDEVICE_AVAILABLE = True
+except ImportError:
+    SOUNDDEVICE_AVAILABLE = False
+
 from amadeus.core.ports import TTSPort
 
 logger = logging.getLogger(__name__)
@@ -448,3 +463,275 @@ class SilentTTSAdapter(TTSPort):
     def set_volume(self, volume: float) -> None:
         """Does nothing."""
         pass
+
+
+class PiperTTSAdapter(TTSPort):
+    """
+    Piper TTS adapter for cross-platform offline speech synthesis.
+    
+    Uses Piper (https://github.com/rhasspy/piper) for high-quality,
+    fast, offline text-to-speech. Supports Ukrainian and many other languages.
+    
+    Attributes:
+        model_path: Path to the Piper voice model (.onnx file)
+        config_path: Path to the model config (.json file)
+        sample_rate: Audio sample rate (determined by model)
+    """
+    
+    # Ukrainian voice models
+    VOICE_MODELS = {
+        "uk_UA-ukrainian_tts-medium": {
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/uk/uk_UA/ukrainian_tts/medium/uk_UA-ukrainian_tts-medium.onnx",
+            "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/uk/uk_UA/ukrainian_tts/medium/uk_UA-ukrainian_tts-medium.onnx.json",
+            "quality": "medium",
+            "description": "Ukrainian female voice (medium quality)",
+        },
+        "uk_UA-lada-x_low": {
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/uk/uk_UA/lada/x_low/uk_UA-lada-x_low.onnx",
+            "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/uk/uk_UA/lada/x_low/uk_UA-lada-x_low.onnx.json",
+            "quality": "x_low",
+            "description": "Ukrainian female voice (low quality, faster)",
+        },
+        "en_US-amy-medium": {
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx",
+            "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
+            "quality": "medium",
+            "description": "English US female voice",
+        },
+    }
+    
+    DEFAULT_VOICE = "uk_UA-ukrainian_tts-medium"
+    
+    def __init__(
+        self,
+        voice: str = DEFAULT_VOICE,
+        models_dir: str = "models/piper",
+        length_scale: float = 1.0,
+        noise_scale: float = 0.667,
+        noise_w: float = 0.8,
+    ) -> None:
+        """
+        Initialize Piper TTS adapter.
+        
+        Args:
+            voice: Voice model name (from VOICE_MODELS)
+            models_dir: Directory to store downloaded models
+            length_scale: Speech speed (1.0 = normal, <1.0 = faster, >1.0 = slower)
+            noise_scale: Phoneme noise (affects expressiveness)
+            noise_w: Phoneme width noise
+        
+        Raises:
+            RuntimeError: If Piper is not available
+        """
+        if not PIPER_AVAILABLE:
+            raise RuntimeError(
+                "Piper TTS is not installed. Install with: pip install piper-tts"
+            )
+        
+        if not SOUNDDEVICE_AVAILABLE:
+            raise RuntimeError(
+                "sounddevice is not installed. Install with: pip install sounddevice"
+            )
+        
+        self.voice_name = voice
+        self.models_dir = Path(models_dir)
+        self.length_scale = length_scale
+        self.noise_scale = noise_scale
+        self.noise_w = noise_w
+        
+        self._voice: Optional[PiperVoice] = None
+        self._sample_rate: int = 22050
+        self._is_speaking = False
+        
+        # Ensure models directory exists
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Load voice model
+        self._load_voice(voice)
+        
+        logger.info(f"Piper TTS initialized: voice={voice}, sample_rate={self._sample_rate}")
+    
+    def _load_voice(self, voice: str) -> None:
+        """Load a Piper voice model, downloading if necessary."""
+        if voice not in self.VOICE_MODELS:
+            available = ", ".join(self.VOICE_MODELS.keys())
+            raise ValueError(f"Unknown voice '{voice}'. Available: {available}")
+        
+        model_info = self.VOICE_MODELS[voice]
+        model_path = self.models_dir / f"{voice}.onnx"
+        config_path = self.models_dir / f"{voice}.onnx.json"
+        
+        # Download model if not exists
+        if not model_path.exists():
+            logger.info(f"Downloading Piper voice model: {voice}")
+            self._download_file(model_info["url"], model_path)
+        
+        if not config_path.exists():
+            logger.info(f"Downloading Piper voice config: {voice}")
+            self._download_file(model_info["config_url"], config_path)
+        
+        # Load voice
+        logger.info(f"Loading Piper voice: {voice}")
+        self._voice = PiperVoice.load(str(model_path), config_path=str(config_path))
+        self._sample_rate = self._voice.config.sample_rate
+    
+    def _download_file(self, url: str, path: Path) -> None:
+        """Download a file from URL."""
+        import urllib.request
+        
+        logger.info(f"Downloading: {url}")
+        try:
+            urllib.request.urlretrieve(url, path)
+            logger.info(f"Downloaded to: {path}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to download {url}: {e}")
+    
+    def speak(self, text: str) -> None:
+        """
+        Speak text using Piper TTS.
+        
+        Args:
+            text: Text to speak
+        """
+        if not text or not text.strip():
+            return
+        
+        if self._voice is None:
+            logger.error("Voice not loaded")
+            return
+        
+        try:
+            self._is_speaking = True
+            
+            # Process text (remove markup tags) and lowercase for better phoneme mapping
+            processed_text = self._process_text(text).lower()
+            
+            # Create synthesis config with our parameters
+            syn_config = SynthesisConfig(
+                length_scale=self.length_scale,
+                noise_scale=self.noise_scale,
+                noise_w_scale=self.noise_w,
+            )
+            
+            # Synthesize audio using synthesize() method
+            import numpy as np
+            audio_chunks = []
+            for chunk in self._voice.synthesize(processed_text, syn_config=syn_config):
+                audio_chunks.append(chunk.audio_int16_array)
+            
+            # Combine audio chunks
+            if audio_chunks:
+                audio_array = np.concatenate(audio_chunks)
+                
+                # Play audio
+                sd.play(audio_array, samplerate=self._sample_rate)
+                sd.wait()  # Wait until audio is finished
+            
+        except Exception as e:
+            logger.error(f"Piper TTS error: {e}")
+        finally:
+            self._is_speaking = False
+    
+    def speak_with_emotion(self, text: str, emotion: EmotionType = EmotionType.NEUTRAL) -> None:
+        """
+        Speak text with emotion (simulated via speech parameters).
+        
+        Piper doesn't have native emotion support, so we simulate it
+        by adjusting length_scale (speed) and pauses.
+        
+        Args:
+            text: Text to speak
+            emotion: Emotion type
+        """
+        # Adjust parameters based on emotion
+        original_length_scale = self.length_scale
+        
+        emotion_settings = {
+            EmotionType.NEUTRAL: 1.0,
+            EmotionType.HAPPY: 0.9,      # Slightly faster
+            EmotionType.EXCITED: 0.85,   # Faster
+            EmotionType.CONCERNED: 1.1,  # Slower
+            EmotionType.APOLOGETIC: 1.15, # Slower
+            EmotionType.CONFIDENT: 0.95, # Slightly faster
+            EmotionType.FRIENDLY: 0.95,  # Slightly faster
+            EmotionType.ALERT: 0.9,      # Slightly faster
+        }
+        
+        self.length_scale = emotion_settings.get(emotion, 1.0)
+        
+        try:
+            self.speak(text)
+        finally:
+            self.length_scale = original_length_scale
+    
+    def _process_text(self, text: str) -> str:
+        """Process text, handling markup tags."""
+        # Remove <pause>, <break> tags and add actual pauses via punctuation
+        text = re.sub(r"<pause>|<break>", "...", text)
+        
+        # Clean up multiple dots
+        text = re.sub(r"\.{4,}", "...", text)
+        
+        return text.strip()
+    
+    def stop(self) -> None:
+        """Stop current speech."""
+        if self._is_speaking:
+            try:
+                sd.stop()
+            except Exception as e:
+                logger.error(f"Error stopping Piper TTS: {e}")
+            self._is_speaking = False
+    
+    def get_available_voices(self) -> list:
+        """Return list of available voice models."""
+        return [
+            {
+                "name": name,
+                "id": name,
+                "quality": info["quality"],
+                "description": info["description"],
+            }
+            for name, info in self.VOICE_MODELS.items()
+        ]
+    
+    def set_voice(self, voice_id: str) -> bool:
+        """
+        Change voice model.
+        
+        Args:
+            voice_id: Voice model name
+            
+        Returns:
+            True if successful
+        """
+        try:
+            self._load_voice(voice_id)
+            self.voice_name = voice_id
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set voice: {e}")
+            return False
+    
+    def set_rate(self, rate: int) -> None:
+        """
+        Set speech rate.
+        
+        Args:
+            rate: Words per minute (approximate, mapped to length_scale)
+        """
+        # Map WPM to length_scale (180 WPM = 1.0, higher = faster = lower scale)
+        self.length_scale = 180.0 / max(rate, 50)
+    
+    def set_volume(self, volume: float) -> None:
+        """
+        Set volume (not directly supported by Piper, would need audio processing).
+        
+        Args:
+            volume: Volume level (0.0 to 1.0) - currently ignored
+        """
+        logger.debug(f"Volume setting not supported by Piper TTS: {volume}")
+
+
+# Import Path at module level for PiperTTSAdapter
+from pathlib import Path
