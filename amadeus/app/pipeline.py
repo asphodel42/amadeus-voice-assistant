@@ -29,7 +29,7 @@ from amadeus.core.entities import (
     IntentType,
     RiskLevel,
 )
-from amadeus.core.planner import Planner, PlanRenderer
+from amadeus.core.planner import Planner
 from amadeus.core.policy import PolicyDecision, PolicyEngine
 from amadeus.core.state_machine import (
     AssistantState,
@@ -85,10 +85,6 @@ class PipelineResult:
         return self.intent is not None and self.intent.is_unknown
 
 
-# Types for callbacks
-PipelineCallback = Callable[["VoicePipeline", str, Any], None]
-
-
 class VoicePipeline:
     """
     Main pipeline for processing voice commands.
@@ -131,9 +127,6 @@ class VoicePipeline:
         self.state_machine = ConfirmationStateMachine()
         self.planner = planner or Planner()
         self.policy_engine = policy_engine or PolicyEngine()
-
-        # Callbacks for various events
-        self._callbacks: Dict[str, List[PipelineCallback]] = {}
 
         # Adapters (initialized lazily)
         self._nlu = None
@@ -530,12 +523,10 @@ class VoicePipeline:
             )
 
             # Log start
-            self._emit("command_received", {"request": request})
             self._log_audit("command_received", request=request)
             
             # NLU
             intent = self._parse_intent(text)
-            self._emit("intent_recognized", {"intent": intent})
             
             # Log NLU result
             self._log_audit(
@@ -558,7 +549,6 @@ class VoicePipeline:
                     
                     # Execute the pending plan
                     results = self._execute_plan(self._pending_plan)
-                    self._emit("execution_complete", {"results": results})
                     self._log_audit("execution_complete", request=self._pending_request, plan=self._pending_plan)
                     
                     # Clear pending
@@ -634,7 +624,6 @@ class VoicePipeline:
                 dry_run=dry_run or self.config.dry_run_by_default,
                 created_at=plan.created_at,
             )
-            self._emit("plan_ready", {"plan": plan})
             
             # Log plan creation
             self._log_audit(
@@ -663,7 +652,6 @@ class VoicePipeline:
             
             # Policy Evaluation
             decision = self.policy_engine.evaluate(plan)
-            self._emit("policy_evaluated", {"decision": decision})
             
             if not decision.allowed:
                 # LISTENING -> IDLE (via ERROR)
@@ -699,12 +687,6 @@ class VoicePipeline:
                     }
                 )
                 
-                # Emit confirmation needed event
-                self._emit("confirmation_needed", {
-                    "plan": plan,
-                    "decision": decision,
-                })
-                
                 logger.info(f"Confirmation required for plan: {plan.plan_id}")
                 logger.info(f"Risk level: {plan.max_risk.name}")
                 
@@ -733,7 +715,6 @@ class VoicePipeline:
             else:
                 results = self._simulate_plan(plan)
             
-            self._emit("execution_complete", {"results": results})
             self._log_audit("execution_complete", request=request, plan=plan)
 
             # Check success
@@ -757,7 +738,6 @@ class VoicePipeline:
             
         except Exception as e:
             logger.exception(f"Pipeline error: {e}")
-            self._emit("error", {"error": str(e)})
             # Try to recover to IDLE
             try:
                 if not self.state_machine.is_idle:
@@ -777,48 +757,6 @@ class VoicePipeline:
     def reset(self) -> None:
         """Resets the pipeline state."""
         self.state_machine.force_reset()
-        self._emit("reset", {})
-
-    # ============================================
-    # Event System
-    # ============================================
-
-    def on(self, event: str, callback: PipelineCallback) -> None:
-        """
-        Registers a callback for an event.
-
-        Events:
-        - command_received: Command received
-        - intent_recognized: Intent recognized
-        - plan_ready: Plan ready
-        - policy_evaluated: Policy evaluated
-        - confirmation_needed: Confirmation needed
-        - execution_complete: Execution complete
-        - error: Error
-        - reset: Reset
-        """
-        if event not in self._callbacks:
-            self._callbacks[event] = []
-        self._callbacks[event].append(callback)
-
-    def off(self, event: str, callback: PipelineCallback) -> bool:
-        """Removes a callback."""
-        if event in self._callbacks:
-            try:
-                self._callbacks[event].remove(callback)
-                return True
-            except ValueError:
-                pass
-        return False
-
-    def _emit(self, event: str, data: Dict[str, Any]) -> None:
-        """Calls all callbacks for an event."""
-        if event in self._callbacks:
-            for callback in self._callbacks[event]:
-                try:
-                    callback(self, event, data)
-                except Exception as e:
-                    logger.error(f"Callback error for event '{event}': {e}")
 
     # ============================================
     # Internal Methods

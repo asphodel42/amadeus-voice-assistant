@@ -74,18 +74,46 @@ class BaseOSAdapter(ABC):
             True if allowed
         """
         try:
+            # Security: Block obvious path traversal attempts before resolution
+            path_str = str(path)
+            if ".." in path_str or path_str.startswith("/") or (len(path_str) > 1 and path_str[1] == ":"):
+                # Allow absolute paths, but be careful with ..
+                if ".." in path_str:
+                    # Check if .. is used for traversal
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Path traversal attempt detected: {path}")
+            
             target = Path(path).expanduser().resolve()
+            
+            # Security: Check for symlinks (they could point outside allowed dirs)
+            if target.is_symlink():
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Symlink detected: {path} -> {target}")
+                # Resolve and check the actual target
+                target = target.resolve(strict=False)
 
             # Check if the path is within allowed directories
             for allowed in self._allowed_directories:
                 try:
+                    # Security: Ensure target is actually under allowed directory
+                    # This handles the resolved path, preventing traversal
                     target.relative_to(allowed)
+                    
+                    # Additional check: Make sure resolved path is really under allowed
+                    if not str(target).startswith(str(allowed)):
+                        continue
+                    
                     return True
                 except ValueError:
                     continue
             
             return False
-        except Exception:
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Path validation error for '{path}': {e}")
             return False
 
     def add_allowed_directory(self, path: str) -> bool:

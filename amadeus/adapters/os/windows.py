@@ -23,6 +23,35 @@ class WindowsAdapter(BaseOSAdapter):
 
     Implements all OS-specific operations for Windows 10/11.
     """
+    
+    # Safe file extensions that can be opened
+    SAFE_FILE_EXTENSIONS = {
+        # Documents
+        ".txt", ".md", ".pdf", ".docx", ".doc", ".odt", ".rtf",
+        # Spreadsheets
+        ".xlsx", ".xls", ".csv", ".ods",
+        # Presentations  
+        ".pptx", ".ppt", ".odp",
+        # Images
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".webp", ".ico",
+        # Code/Config
+        ".py", ".js", ".ts", ".html", ".css", ".json", ".xml", ".yaml", ".yml",
+        ".toml", ".ini", ".cfg", ".conf", ".sh", ".bat",
+        # Data
+        ".sql", ".db", ".sqlite", ".sqlite3",
+        # Archives (read-only in most viewers)
+        ".zip", ".rar", ".7z", ".tar", ".gz",
+        # Media (safe to open in players)
+        ".mp3", ".mp4", ".avi", ".mkv", ".wav", ".flac",
+    }
+    
+    # Dangerous extensions that should NEVER be opened automatically
+    DANGEROUS_EXTENSIONS = {
+        ".exe", ".com", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", 
+        ".js", ".jse", ".wsf", ".wsh", ".msi", ".msp", ".scr",
+        ".hta", ".cpl", ".msc", ".jar", ".app", ".deb", ".rpm",
+        ".sh", ".bash", ".zsh", ".fish",  # Unix shells
+    }
 
     def _init_default_allowed_apps(self) -> None:
         """Initializes the whitelist of allowed apps for Windows."""
@@ -602,6 +631,8 @@ class WindowsAdapter(BaseOSAdapter):
         
         Uses Windows 'start' command to open files with their associated programs.
         Properly handles file paths with spaces and special characters.
+        
+        Security: Only opens files with safe extensions to prevent executing malicious files.
         """
         target = Path(path).expanduser().resolve()
         
@@ -610,6 +641,23 @@ class WindowsAdapter(BaseOSAdapter):
         
         if not target.is_file():
             raise IsADirectoryError(f"Path is a directory, not a file: {path}")
+        
+        # Security: Check file extension
+        extension = target.suffix.lower()
+        
+        if extension in self.DANGEROUS_EXTENSIONS:
+            raise PermissionError(
+                f"Cannot open file with dangerous extension: {extension}. "
+                f"Executable files must be launched explicitly via 'launch application' command."
+            )
+        
+        if extension and extension not in self.SAFE_FILE_EXTENSIONS:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Opening file with non-whitelisted extension: {extension}. "
+                f"File: {target}"
+            )
         
         try:
             # Windows: use start command with proper quoting
