@@ -293,7 +293,7 @@ class WakeWordPort(Protocol):
 
 @runtime_checkable
 class ASRPort(Protocol):
-    """Порт для розпізнавання мови (Automatic Speech Recognition)."""
+    """Port for automatic speech recognition."""
 
     @abstractmethod
     def transcribe(self, audio_data: bytes) -> str:

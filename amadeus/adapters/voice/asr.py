@@ -35,7 +35,6 @@ logger = logging.getLogger(__name__)
 ModelSize = Literal["tiny", "base", "small", "medium", "large-v2", "large-v3"]
 
 # Blacklisted languages - if detected, will fallback to English
-# Russian is blacklisted due to political reasons
 LANGUAGE_BLACKLIST = {"ru", "russian"}
 
 # Fallback language when blacklisted language is detected
