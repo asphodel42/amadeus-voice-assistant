@@ -576,7 +576,8 @@ class LinuxAdapter(BaseOSAdapter):
         app_cmd = self._allowed_apps.get(app_name.lower(), app_name)
         
         if app_name.lower() == "browser":
-            webbrowser.open("about:blank")
+            # Open default browser - use a real URL to ensure browser starts
+            webbrowser.open("https://www.google.com")
             return True
         
         cmd = [app_cmd]

@@ -587,9 +587,9 @@ class WindowsAdapter(BaseOSAdapter):
         
         # Special cases
         if app_name.lower() == "browser":
-            # Open default browser with empty page
+            # Open default browser - use a real URL to ensure browser starts
             import webbrowser
-            webbrowser.open("about:blank")
+            webbrowser.open("https://www.google.com")
             return True
 
         # If path starts with "ms-" it's a Windows Store app
